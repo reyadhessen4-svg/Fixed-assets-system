@@ -216,6 +216,7 @@ let state = {
   reportType:'monthly',
   categoryModal:null, branchModal:null, deptModal:null, supplierModal:null, confirmModal:null,
   newUserModal:null, newUserBusy:false, newUserMsg:'',
+  importModal:null, importBusy:false, importResult:null,
 };
 
 /* ============ FIRESTORE PERSISTENCE ============ */
@@ -650,6 +651,7 @@ function renderAssetsList(){
     <div class="field"><label>الإدارة</label><select id="flDept"><option value="all">الكل</option>${state.departments.map(d=>`<option value="${d.id}" ${fd===d.id?'selected':''}>${d.name}</option>`).join('')}</select></div>
     <div class="field"><label>الحالة</label><select id="flStatus"><option value="all">الكل</option>${Object.keys(STATUS_LABELS).map(s=>`<option value="${s}" ${fs===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('')}</select></div>
     <button class="btn btn-primary" data-nav="assetForm">${ICON.add} أصل جديد</button>
+    ${perm().add?`<button class="btn" id="openImportBtn">${ICON.excel} استيراد من Excel</button>`:''}
   </div>
   ${filtered.length===0? `<div class="empty card"><div class="ic">${ICON.search}</div><h3>لا توجد نتائج</h3><p>جرّب تعديل الفلاتر أو كلمة البحث.</p></div>` : `
   <div class="table-wrap">
@@ -678,7 +680,37 @@ function renderAssetsList(){
   </table>
   </div>`}
   <p class="hint" style="margin-top:10px;">إجمالي النتائج: ${filtered.length} من ${assets.length} أصل</p>
+  ${renderImportModal()}
   `;
+}
+function renderImportModal(){
+  if(!state.importModal) return '';
+  const myCos = allowedCompanyList();
+  const busy = state.importBusy;
+  const result = state.importResult;
+  return `
+  <div class="modal-overlay" id="importOverlay">
+    <div class="modal" style="max-width:520px;">
+      <h3>استيراد أصول من ملف Excel</h3>
+      <p class="hint" style="margin-bottom:14px;">استخدم القالب المعتمد (الأعمدة: اسم الأصل، الموقع، سعر الشراء، تاريخ بداية الاستخدام، نسبة الإهلاك السنوية %). حمّل القالب أولاً إن لم يكن لديك نسخة منه، ثم املأه وارفعه هنا.</p>
+      <div class="field" style="margin-bottom:10px;"><label>الشركة الافتراضية لكل الصفوف *</label>
+        <select id="impCompany">${myCos.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select>
+      </div>
+      <div class="field" style="margin-bottom:10px;"><label>التصنيف الافتراضي لكل الصفوف *</label>
+        <select id="impCategory">${state.categories.slice().sort((x,y)=>(Number(x.order)||0)-(Number(y.order)||0)).map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select>
+      </div>
+      <div class="field" style="margin-bottom:10px;"><label>الفرع</label>
+        <select id="impBranch">${state.branches.map(b=>`<option value="${b.id}">${b.name}</option>`).join('')}</select>
+      </div>
+      <div class="field" style="margin-bottom:14px;"><label>ملف Excel (.xlsx)</label><input type="file" id="impFile" accept=".xlsx,.xls"></div>
+      ${result?`<div class="perm-note" style="background:var(--green-100);color:var(--green-600);">تم استيراد ${result.success} أصل بنجاح${result.skipped?(', وتخطي '+result.skipped+' صف بسبب نقص بيانات'):''}.</div>`:''}
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="startImportBtn" ${busy?'disabled':''}>${busy?'جارٍ الاستيراد...':'بدء الاستيراد'}</button>
+        <button type="button" class="btn" id="downloadTemplateBtn">تحميل القالب</button>
+        <button type="button" class="btn" id="closeImportModal">إغلاق</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 /* ============ ASSET FORM ============ */
@@ -1259,7 +1291,93 @@ function attachGlobalEvents(){
         }catch(e){ console.error(e); showToast('تعذر حذف الأصل من قاعدة البيانات'); }
       }
     }));
+    bindImportEvents();
   }
+}
+
+function downloadImportTemplate(){
+  const headers = ['اسم الأصل *','الموقع','سعر الشراء (التكلفة) *','تاريخ بداية الاستخدام (YYYY-MM-DD) *','نسبة الإهلاك السنوية % *','الشركة (اختياري)','التصنيف (اختياري)'];
+  const example = ['مكيف اسبليت 2 طن','الفرع الرئيسي - الطابق الثاني', 12000, '2024-01-15', 20, state.companies[0]?.name||'', state.categories[0]?.name||''];
+  const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+  ws['!cols'] = [{wch:28},{wch:22},{wch:20},{wch:26},{wch:24},{wch:24},{wch:20}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'استيراد الأصول');
+  XLSX.writeFile(wb, 'قالب-استيراد-الأصول.xlsx');
+}
+function excelDateToISO(v){
+  if(v===undefined||v===null||v==='') return null;
+  if(typeof v === 'number'){
+    const d = XLSX.SSF.parse_date_code(v);
+    if(!d) return null;
+    const dt = new Date(Date.UTC(d.y, d.m-1, d.d));
+    return dt.toISOString().slice(0,10);
+  }
+  const dt = new Date(v);
+  if(isNaN(dt)) return null;
+  return dt.toISOString().slice(0,10);
+}
+function bindImportEvents(){
+  document.getElementById('openImportBtn')?.addEventListener('click', ()=>{ state.importModal=true; state.importResult=null; render(); });
+  document.getElementById('closeImportModal')?.addEventListener('click', ()=>{ state.importModal=null; state.importResult=null; render(); });
+  document.getElementById('importOverlay')?.addEventListener('click', e=>{ if(e.target.id==='importOverlay'){ state.importModal=null; render(); }});
+  document.getElementById('downloadTemplateBtn')?.addEventListener('click', downloadImportTemplate);
+  document.getElementById('startImportBtn')?.addEventListener('click', async ()=>{
+    const fileInput = document.getElementById('impFile');
+    const file = fileInput?.files?.[0];
+    if(!file){ showToast('اختر ملف Excel أولاً'); return; }
+    const defaultCompanyId = document.getElementById('impCompany').value;
+    const defaultCategoryId = document.getElementById('impCategory').value;
+    const defaultBranchId = document.getElementById('impBranch').value;
+    if(!hasCompanyAccess(defaultCompanyId)){ showToast('لا تملك صلاحية الاستيراد لهذه المؤسسة'); return; }
+    state.importBusy = true; render();
+    try{
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array', cellDates:false});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+      let headerIdx = rows.findIndex(r => String(r[0]||'').includes('اسم الأصل'));
+      if(headerIdx === -1) headerIdx = 0;
+      let dataRows = rows.slice(headerIdx+1).filter(r=>r.some(cell=>String(cell).trim()!==''));
+      let success=0, skipped=0;
+      const seqCounter = {};
+      for(const r of dataRows){
+        const name = String(r[0]||'').trim();
+        const location = String(r[1]||'').trim();
+        const cost = Number(r[2]);
+        const startDate = excelDateToISO(r[3]);
+        const rate = Number(r[4]);
+        const companyNameOverride = String(r[5]||'').trim();
+        const categoryNameOverride = String(r[6]||'').trim();
+        if(!name || !cost || !startDate || !rate){ skipped++; continue; }
+        let companyId = defaultCompanyId;
+        if(companyNameOverride){ const c = state.companies.find(x=>x.name===companyNameOverride); if(c) companyId = c.id; }
+        if(!hasCompanyAccess(companyId)){ skipped++; continue; }
+        let categoryId = defaultCategoryId;
+        if(categoryNameOverride){ const c = state.categories.find(x=>x.name===categoryNameOverride); if(c) categoryId = c.id; }
+        const usefulLifeYears = rate>0 ? Math.round((100/rate)*2)/2 : 5;
+        const key = companyId+'|'+categoryId;
+        const existingCount = state.assets.filter(a=>a.companyId===companyId && a.categoryId===categoryId).length;
+        seqCounter[key] = (seqCounter[key]===undefined ? existingCount : seqCounter[key]) + 1;
+        const code = `${companyCode(companyId)}-${categoryCode(categoryId)}-${String(seqCounter[key]).padStart(4,'0')}`;
+        const assetObj = {
+          code, name, description:'', companyId, categoryId, branchId:defaultBranchId||'', departmentId:'',
+          custodian:'', supplierId:'', invoiceNo:'', purchaseDate:startDate, depreciationStartDate:startDate,
+          cost, residualValue:0, usefulLifeYears, depreciationMethod:'straight_line', status:'active',
+          location, serialNumber:'', notes:'مستورد من ملف Excel', attachments:[], createdAt:new Date().toISOString()
+        };
+        try{ await addDoc(collection(db,'assets'), assetObj); success++; }
+        catch(e){ console.error('import row failed', e); skipped++; }
+      }
+      state.importResult = {success, skipped};
+      log('استيراد أصول من Excel', success+' أصل');
+      showToast('اكتمل الاستيراد');
+    }catch(e){
+      console.error(e);
+      showToast('تعذر قراءة الملف، تأكد أنه بصيغة Excel صحيحة');
+    }
+    state.importBusy = false;
+    render();
+  });
 }
 
 function bindAssetForm(){
