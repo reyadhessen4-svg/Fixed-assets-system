@@ -709,7 +709,7 @@ function renderAssetForm(){
       <div class="field span-2"><label>اسم الأصل *</label><input name="name" required value="${a.name}"></div>
 
       <div class="field"><label>الشركة *</label><select name="companyId" id="fCompany">${companyOptions.map(c=>`<option value="${c.id}" ${a.companyId===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
-      <div class="field"><label>التصنيف *</label><select name="categoryId" id="fCategory">${state.categories.slice().sort((x,y)=>x.order-y.order).map(c=>`<option value="${c.id}" ${a.categoryId===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
+      <div class="field"><label>التصنيف *</label><select name="categoryId" id="fCategory">${state.categories.slice().sort((x,y)=>(Number(x.order)||0)-(Number(y.order)||0) || x.id.localeCompare(y.id)).map(c=>`<option value="${c.id}" ${a.categoryId===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
       <div class="field"><label>الفرع</label><select name="branchId">${state.branches.map(b=>`<option value="${b.id}" ${a.branchId===b.id?'selected':''}>${b.name}</option>`).join('')}</select></div>
 
       <div class="field"><label>الإدارة</label><select name="departmentId">${state.departments.map(d=>`<option value="${d.id}" ${a.departmentId===d.id?'selected':''}>${d.name}</option>`).join('')}</select></div>
@@ -818,7 +818,7 @@ function renderAssetCard(id){
 /* ============ CATEGORIES ============ */
 function renderCategories(){
   const usedIds = new Set(state.assets.map(a=>a.categoryId));
-  const cats = state.categories.slice().sort((a,b)=>a.order-b.order);
+  const cats = state.categories.slice().sort((a,b)=>(Number(a.order)||0)-(Number(b.order)||0) || a.id.localeCompare(b.id));
   return `
   <div class="modal-actions" style="margin-bottom:16px;">${perm().add?`<button class="btn btn-primary" id="addCategoryBtn">${ICON.add} تصنيف جديد</button>`:''}</div>
   <div class="table-wrap">
@@ -1328,7 +1328,8 @@ function bindCategoryEvents(){
         await updateDoc(doc(db,'categories', state.categoryModal.id), {name:obj.name, code:obj.code.toUpperCase()});
         log('تعديل تصنيف', obj.name);
       } else {
-        await addDoc(collection(db,'categories'), {name:obj.name, code:obj.code.toUpperCase(), order: state.categories.length+1});
+        const maxOrder = state.categories.reduce((m,c)=>Math.max(m, Number(c.order)||0), 0);
+        await addDoc(collection(db,'categories'), {name:obj.name, code:obj.code.toUpperCase(), order: maxOrder+1});
         log('إضافة تصنيف', obj.name);
       }
       showToast('تم الحفظ');
@@ -1337,14 +1338,19 @@ function bindCategoryEvents(){
   });
 }
 async function swapCategoryOrder(id, dir){
-  const cats = state.categories.slice().sort((a,b)=>a.order-b.order);
+  const cats = state.categories.slice().sort((a,b)=>(Number(a.order)||0)-(Number(b.order)||0) || a.id.localeCompare(b.id));
   const idx = cats.findIndex(c=>c.id===id);
   const swapIdx = idx+dir;
   if(swapIdx<0||swapIdx>=cats.length) return;
-  const a1 = cats[idx], a2 = cats[swapIdx];
+  const reordered = cats.slice();
+  const tmp = reordered[idx]; reordered[idx] = reordered[swapIdx]; reordered[swapIdx] = tmp;
   try{
-    await updateDoc(doc(db,'categories', a1.id), {order:a2.order});
-    await updateDoc(doc(db,'categories', a2.id), {order:a1.order});
+    for(let i=0;i<reordered.length;i++){
+      const newOrder = i+1;
+      if(Number(reordered[i].order) !== newOrder){
+        await updateDoc(doc(db,'categories', reordered[i].id), {order:newOrder});
+      }
+    }
   }catch(e){ console.error(e); showToast('تعذر تحديث الترتيب'); }
 }
 
