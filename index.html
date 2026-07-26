@@ -207,7 +207,7 @@ let state = {
   route:'login', routeParam:null,
   theme: (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark':'light'),
   currentRole:'pending',
-  authUser:null, authReady:false, authError:'', authMode:'login', userDocsLoaded:false,
+  authUser:null, authReady:false, authError:'', authMode:'login', userDocsLoaded:false, myCompanies:[],
   filterCompany:'all',
   companies:[], categories:[], branches:[], departments:[], suppliers:[], assets:[], auditLogs:[], users:[],
   settings:{ currency:'ريال سعودي (SAR)', decimals:2, fiscalYearStart:'01-01', numbering:'{COMPANY}-{CATEGORY}-{SEQ}', companyLogoNote:'' },
@@ -257,20 +257,26 @@ async function ensureUserRoleDoc(user){
   const snap = await getDoc(ref);
   if(snap.exists()){
     state.currentRole = snap.data().role || 'pending';
+    state.myCompanies = snap.data().companies || [];
     return;
   }
   const usersSnap = await getDocs(collection(db,'users'));
   if(usersSnap.empty){
-    await setDoc(ref, {email:user.email, role:'admin', createdAt:new Date().toISOString()});
+    await setDoc(ref, {email:user.email, role:'admin', companies:['ALL'], createdAt:new Date().toISOString()});
     state.currentRole = 'admin';
+    state.myCompanies = ['ALL'];
   } else {
-    await setDoc(ref, {email:user.email, role:'pending', createdAt:new Date().toISOString()});
+    await setDoc(ref, {email:user.email, role:'pending', companies:[], createdAt:new Date().toISOString()});
     state.currentRole = 'pending';
+    state.myCompanies = [];
   }
 }
 function subscribeRoleChanges(user){
   onSnapshot(doc(db,'users', user.uid), snap=>{
-    if(snap.exists()) state.currentRole = snap.data().role || 'pending';
+    if(snap.exists()){
+      state.currentRole = snap.data().role || 'pending';
+      state.myCompanies = snap.data().companies || [];
+    }
     startUsersListenerIfNeeded();
     if(state.currentRole!=='pending' && (state.route==='login' || state.route==='pendingRole')) state.route='dashboard';
     render();
@@ -332,12 +338,12 @@ function handleAuth(){
     }
   });
 }
-async function adminCreateUser(email, password, role){
+async function adminCreateUser(email, password, role, companies){
   const secondaryApp = initializeApp(firebaseConfig, 'secondary-'+Date.now());
   const secondaryAuth = getAuth(secondaryApp);
   try{
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-    await setDoc(doc(db,'users', cred.user.uid), {email, role, createdAt:new Date().toISOString()});
+    await setDoc(doc(db,'users', cred.user.uid), {email, role, companies: companies||[], createdAt:new Date().toISOString()});
     await signOut(secondaryAuth);
     await deleteApp(secondaryApp);
     return {ok:true};
@@ -369,8 +375,16 @@ function branchName(id){ const b=state.branches.find(x=>x.id===id); return b?b.n
 function deptName(id){ const d=state.departments.find(x=>x.id===id); return d?d.name:'—'; }
 function supplierName(id){ const s=state.suppliers.find(x=>x.id===id); return s?s.name:'—'; }
 function perm(){ return PERMISSIONS[state.currentRole] || PERMISSIONS.pending; }
+function hasCompanyAccess(companyId){
+  if(state.currentRole==='admin') return true;
+  const list = state.myCompanies||[];
+  return list.includes('ALL') || list.includes(companyId);
+}
+function allowedCompanyList(){
+  return state.companies.filter(c=>hasCompanyAccess(c.id));
+}
 function visibleAssets(){
-  return state.assets.filter(a => state.filterCompany==='all' || a.companyId===state.filterCompany);
+  return state.assets.filter(a => hasCompanyAccess(a.companyId) && (state.filterCompany==='all' || a.companyId===state.filterCompany));
 }
 
 function generateAssetCode(companyId, categoryId){
@@ -496,8 +510,8 @@ function renderTopbar(){
     <div class="topbar-actions">
       <div class="company-switch">
         <select id="companyFilter">
-          <option value="all" ${state.filterCompany==='all'?'selected':''}>كل الشركات</option>
-          ${state.companies.map(c=>`<option value="${c.id}" ${state.filterCompany===c.id?'selected':''}>${c.name}</option>`).join('')}
+          <option value="all" ${state.filterCompany==='all'?'selected':''}>كل الشركات المسموح بها لي</option>
+          ${allowedCompanyList().map(c=>`<option value="${c.id}" ${state.filterCompany===c.id?'selected':''}>${c.name}</option>`).join('')}
         </select>
       </div>
       <div class="pill" style="background:var(--surface-2);">
@@ -670,7 +684,8 @@ function renderAssetsList(){
 /* ============ ASSET FORM ============ */
 function renderAssetForm(){
   const editing = state.editingAssetId ? state.assets.find(a=>a.id===state.editingAssetId) : null;
-  const a = editing || { id:null, code:'', name:'', description:'', companyId: state.companies[0]?.id||'', categoryId: state.categories[0]?.id||'', branchId: state.branches[0]?.id||'', departmentId: state.departments[0]?.id||'', custodian:'', supplierId:'', invoiceNo:'', purchaseDate: new Date().toISOString().slice(0,10), depreciationStartDate:new Date().toISOString().slice(0,10), cost:'', residualValue:0, usefulLifeYears:5, depreciationMethod:'straight_line', status:'active', location:'', serialNumber:'', notes:'', attachments:[] };
+  const myCos = allowedCompanyList();
+  const a = editing || { id:null, code:'', name:'', description:'', companyId: myCos[0]?.id||'', categoryId: state.categories[0]?.id||'', branchId: state.branches[0]?.id||'', departmentId: state.departments[0]?.id||'', custodian:'', supplierId:'', invoiceNo:'', purchaseDate: new Date().toISOString().slice(0,10), depreciationStartDate:new Date().toISOString().slice(0,10), cost:'', residualValue:0, usefulLifeYears:5, depreciationMethod:'straight_line', status:'active', location:'', serialNumber:'', notes:'', attachments:[] };
   if(!editing && !state._draftCode){ state._draftCode = generateAssetCode(a.companyId, a.categoryId); }
   const codeVal = editing ? a.code : (state._draftCode || generateAssetCode(a.companyId, a.categoryId));
   if(!perm().add && !editing){
@@ -679,13 +694,21 @@ function renderAssetForm(){
   if(editing && !perm().edit){
     return `<div class="perm-note">صلاحيتك الحالية (${ROLE_LABELS[state.currentRole]}) لا تسمح بتعديل الأصول.</div>`;
   }
+  if(myCos.length===0){
+    return `<div class="perm-note">لا يملك حسابك صلاحية الوصول لأي مؤسسة بعد. تواصل مع مدير النظام لتحديد المؤسسات المسموح لك بالعمل عليها.</div>`;
+  }
+  let companyOptions = myCos.slice();
+  if(editing && !companyOptions.find(c=>c.id===a.companyId)){
+    const cur = state.companies.find(c=>c.id===a.companyId);
+    if(cur) companyOptions = [cur, ...companyOptions];
+  }
   return `
   <form id="assetForm" class="card">
     <div class="form-grid">
       <div class="field"><label>كود الأصل</label><input name="code" value="${codeVal}"></div>
       <div class="field span-2"><label>اسم الأصل *</label><input name="name" required value="${a.name}"></div>
 
-      <div class="field"><label>الشركة *</label><select name="companyId" id="fCompany">${state.companies.map(c=>`<option value="${c.id}" ${a.companyId===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
+      <div class="field"><label>الشركة *</label><select name="companyId" id="fCompany">${companyOptions.map(c=>`<option value="${c.id}" ${a.companyId===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
       <div class="field"><label>التصنيف *</label><select name="categoryId" id="fCategory">${state.categories.slice().sort((x,y)=>x.order-y.order).map(c=>`<option value="${c.id}" ${a.categoryId===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
       <div class="field"><label>الفرع</label><select name="branchId">${state.branches.map(b=>`<option value="${b.id}" ${a.branchId===b.id?'selected':''}>${b.name}</option>`).join('')}</select></div>
 
@@ -1139,20 +1162,32 @@ function renderUsers(){
   if(!perm().manageUsers) return `<div class="perm-note">لا تملك صلاحية إدارة المستخدمين.</div>`;
   return `
   <div class="modal-actions" style="margin-bottom:16px;"><button class="btn btn-primary" id="addUserBtn">${ICON.add} إنشاء مستخدم جديد</button></div>
+  <p class="hint" style="margin-bottom:10px;">حدد لكل مستخدم المؤسسات التي يحق له الاطلاع عليها وتسجيل الأصول فيها. مدير النظام يملك دائماً صلاحية كاملة على كل المؤسسات.</p>
   <div class="table-wrap"><table>
-    <thead><tr><th>البريد الإلكتروني</th><th>الدور</th><th>تاريخ الإنشاء</th><th></th></tr></thead>
+    <thead><tr><th>البريد الإلكتروني</th><th>الدور</th><th>المؤسسات المسموح بها</th><th>تاريخ الإنشاء</th></tr></thead>
     <tbody>
-    ${state.users.length===0?`<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">لا يوجد مستخدمون بعد</td></tr>`:state.users.map(u=>`
+    ${state.users.length===0?`<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">لا يوجد مستخدمون بعد</td></tr>`:state.users.map(u=>{
+      const isSelf = state.authUser && state.authUser.uid===u.id;
+      const cos = u.companies||[];
+      const isAll = cos.includes('ALL') || u.role==='admin';
+      return `
       <tr>
-        <td>${u.email}${state.authUser && state.authUser.uid===u.id?' (أنت)':''}</td>
+        <td>${u.email}${isSelf?' (أنت)':''}</td>
         <td>
-          <select data-role-select="${u.id}" ${state.authUser && state.authUser.uid===u.id?'disabled':''}>
+          <select data-role-select="${u.id}" ${isSelf?'disabled':''}>
             ${Object.keys(ROLE_LABELS).filter(r=>r!=='pending').map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${ROLE_LABELS[r]}</option>`).join('')}
           </select>
         </td>
+        <td>
+          ${u.role==='admin' ? `<span class="hint">كل الشركات (بحكم دور المدير)</span>` : `
+          <div class="pill-list">
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="checkbox" data-uc-all="${u.id}" ${isAll?'checked':''} ${isSelf?'disabled':''}> كل الشركات</label>
+            ${state.companies.map(c=>`<label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="checkbox" data-uc="${u.id}:${c.id}" ${(isAll||cos.includes(c.id))?'checked':''} ${(isAll||isSelf)?'disabled':''}> ${c.name}</label>`).join('')}
+          </div>`}
+        </td>
         <td>${u.createdAt?fmtDate(u.createdAt):'—'}</td>
-        <td></td>
-      </tr>`).join('')}
+      </tr>`;
+    }).join('')}
     </tbody>
   </table></div>
   ${renderNewUserModal()}
@@ -1168,7 +1203,14 @@ function renderNewUserModal(){
       <form id="newUserForm">
         <div class="field" style="margin-bottom:10px;"><label>البريد الإلكتروني *</label><input type="email" name="email" required></div>
         <div class="field" style="margin-bottom:10px;"><label>كلمة مرور مبدئية *</label><input type="password" name="password" required minlength="6"></div>
-        <div class="field"><label>الدور</label><select name="role">${Object.keys(ROLE_LABELS).filter(r=>r!=='pending').map(r=>`<option value="${r}">${ROLE_LABELS[r]}</option>`).join('')}</select></div>
+        <div class="field" style="margin-bottom:10px;"><label>الدور</label><select name="role">${Object.keys(ROLE_LABELS).filter(r=>r!=='pending').map(r=>`<option value="${r}">${ROLE_LABELS[r]}</option>`).join('')}</select></div>
+        <div class="field">
+          <label>المؤسسات المسموح بالوصول إليها</label>
+          <div class="pill-list">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" name="company_all" checked> كل الشركات</label>
+            ${state.companies.map(c=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" name="company_${c.id}"> ${c.name}</label>`).join('')}
+          </div>
+        </div>
         <div class="modal-actions"><button type="submit" class="btn btn-primary" ${state.newUserBusy?'disabled':''}>${state.newUserBusy?'جارٍ الإنشاء...':'إنشاء الحساب'}</button><button type="button" class="btn" id="closeNewUserModal">إلغاء</button></div>
       </form>
     </div>
@@ -1245,6 +1287,10 @@ function bindAssetForm(){
     ['cost','residualValue','usefulLifeYears'].forEach(k=>obj[k]=Number(obj[k]||0));
     const attachments = Array.from(document.querySelectorAll('#attachList .pill')).map(p=>p.textContent.replace('✕','').trim());
     obj.attachments = attachments;
+    if(!hasCompanyAccess(obj.companyId)){
+      showToast('لا تملك صلاحية تسجيل أصول لهذه المؤسسة');
+      return;
+    }
     try{
       if(state.editingAssetId){
         await updateDoc(doc(db,'assets', state.editingAssetId), {...obj, updatedAt:new Date().toISOString()});
@@ -1411,11 +1457,34 @@ function bindUsersEvents(){
       showToast('تم تحديث الدور');
     }catch(err){ console.error(err); showToast('تعذر تحديث الدور'); }
   }));
+  document.querySelectorAll('[data-uc-all]').forEach(cb=>cb.addEventListener('change', async e=>{
+    const uidTarget = cb.dataset.ucAll;
+    const companies = e.target.checked ? ['ALL'] : [];
+    try{
+      await updateDoc(doc(db,'users', uidTarget), {companies});
+      log('تحديث صلاحية الشركات', uidTarget);
+      showToast('تم تحديث صلاحية الشركات');
+    }catch(err){ console.error(err); showToast('تعذر التحديث'); }
+  }));
+  document.querySelectorAll('[data-uc]').forEach(cb=>cb.addEventListener('change', async e=>{
+    const [uidTarget, coId] = cb.dataset.uc.split(':');
+    const u = state.users.find(x=>x.id===uidTarget);
+    let companies = (u && u.companies) ? u.companies.filter(c=>c!=='ALL') : [];
+    if(e.target.checked){ if(!companies.includes(coId)) companies.push(coId); }
+    else { companies = companies.filter(c=>c!==coId); }
+    try{
+      await updateDoc(doc(db,'users', uidTarget), {companies});
+      log('تحديث صلاحية الشركات', uidTarget);
+      showToast('تم تحديث صلاحية الشركات');
+    }catch(err){ console.error(err); showToast('تعذر التحديث'); }
+  }));
   document.getElementById('newUserForm')?.addEventListener('submit', async e=>{
     e.preventDefault();
     const fd = new FormData(e.target); const obj = Object.fromEntries(fd.entries());
+    const companyAll = fd.get('company_all');
+    const companies = companyAll ? ['ALL'] : state.companies.filter(c=>fd.get('company_'+c.id)).map(c=>c.id);
     state.newUserBusy = true; render();
-    const result = await adminCreateUser(obj.email, obj.password, obj.role);
+    const result = await adminCreateUser(obj.email, obj.password, obj.role, companies);
     state.newUserBusy = false;
     if(result.ok){
       log('إنشاء مستخدم', obj.email);
