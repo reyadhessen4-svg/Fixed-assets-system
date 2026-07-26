@@ -244,26 +244,6 @@ function listenCollection(colName, opts){
     if(state.authUser) showToast('تعذر الاتصال بقاعدة البيانات (' + colName + ')');
   });
 }
-async function initFirestore(){
-  await seedCollectionIfEmpty('companies', DEFAULT_COMPANIES);
-  await seedCollectionIfEmpty('categories', DEFAULT_CATEGORIES);
-  await seedCollectionIfEmpty('branches', [{id:'br-main', name:'الفرع الرئيسي'}]);
-  await seedCollectionIfEmpty('departments', [{id:'dep-admin', name:'الإدارة العامة'}]);
-  await seedSettingsIfEmpty();
-
-  listenCollection('companies');
-  listenCollection('categories', {orderBy:'order'});
-  listenCollection('branches');
-  listenCollection('departments');
-  listenCollection('suppliers');
-  listenCollection('assets');
-  listenCollection('auditLogs', {orderBy:'ts', direction:'desc'});
-  onSnapshot(doc(db,'settings','main'), snap=>{
-    if(snap.exists()) state.settings = snap.data();
-    if(state.ready) render();
-  }, err=>console.error('settings', err));
-}
-
 /* ============ AUTHENTICATION ============ */
 let usersListenerStarted = false;
 function startUsersListenerIfNeeded(){
@@ -272,28 +252,29 @@ function startUsersListenerIfNeeded(){
   usersListenerStarted = true;
   listenCollection('users');
 }
-async function resolveUserRole(user){
+async function ensureUserRoleDoc(user){
   const ref = doc(db,'users', user.uid);
-  onSnapshot(ref, async snap=>{
-    if(snap.exists()){
-      state.currentRole = snap.data().role || 'pending';
-    } else {
-      const usersSnap = await getDocs(collection(db,'users'));
-      if(usersSnap.empty){
-        await setDoc(ref, {email:user.email, role:'admin', createdAt:new Date().toISOString()});
-        state.currentRole = 'admin';
-      } else {
-        await setDoc(ref, {email:user.email, role:'pending', createdAt:new Date().toISOString()});
-        state.currentRole = 'pending';
-      }
-    }
+  const snap = await getDoc(ref);
+  if(snap.exists()){
+    state.currentRole = snap.data().role || 'pending';
+    return;
+  }
+  const usersSnap = await getDocs(collection(db,'users'));
+  if(usersSnap.empty){
+    await setDoc(ref, {email:user.email, role:'admin', createdAt:new Date().toISOString()});
+    state.currentRole = 'admin';
+  } else {
+    await setDoc(ref, {email:user.email, role:'pending', createdAt:new Date().toISOString()});
+    state.currentRole = 'pending';
+  }
+}
+function subscribeRoleChanges(user){
+  onSnapshot(doc(db,'users', user.uid), snap=>{
+    if(snap.exists()) state.currentRole = snap.data().role || 'pending';
     startUsersListenerIfNeeded();
-    if(state.route==='login' || state.route==='pendingRole'){
-      state.route = state.currentRole==='pending' ? 'pendingRole' : 'dashboard';
-    }
-    if(state.currentRole!=='pending' && state.route==='pendingRole') state.route='dashboard';
+    if(state.currentRole!=='pending' && (state.route==='login' || state.route==='pendingRole')) state.route='dashboard';
     render();
-  }, err=>console.error('user role', err));
+  }, err=>console.error('role subscription', err));
 }
 let firestoreInited = false;
 function handleAuth(){
@@ -301,17 +282,48 @@ function handleAuth(){
     state.authReady = true;
     if(user){
       state.authUser = {uid:user.uid, email:user.email};
+      try{
+        await ensureUserRoleDoc(user);
+      }catch(e){
+        console.error('role resolution failed', e);
+        state.authError = 'تعذر تحديد صلاحية المستخدم في قاعدة البيانات. تأكد من لصق قواعد الأمان (Firestore Rules) الصحيحة في Firebase Console.';
+        render();
+        return;
+      }
       if(!firestoreInited){
         firestoreInited = true;
-        try{ await initFirestore(); state.ready = true; }
-        catch(e){
+        try{
+          if(state.currentRole==='admin'){
+            await seedCollectionIfEmpty('companies', DEFAULT_COMPANIES);
+            await seedCollectionIfEmpty('categories', DEFAULT_CATEGORIES);
+            await seedCollectionIfEmpty('branches', [{id:'br-main', name:'الفرع الرئيسي'}]);
+            await seedCollectionIfEmpty('departments', [{id:'dep-admin', name:'الإدارة العامة'}]);
+            await seedSettingsIfEmpty();
+          }
+          listenCollection('companies');
+          listenCollection('categories', {orderBy:'order'});
+          listenCollection('branches');
+          listenCollection('departments');
+          listenCollection('suppliers');
+          listenCollection('assets');
+          listenCollection('auditLogs', {orderBy:'ts', direction:'desc'});
+          onSnapshot(doc(db,'settings','main'), snap=>{
+            if(snap.exists()) state.settings = snap.data();
+            if(state.ready) render();
+          }, err=>console.error('settings', err));
+          state.ready = true;
+        }catch(e){
           console.error('Firestore init failed', e);
-          state.authError = 'تعذر الاتصال بقاعدة البيانات. تحقق من تفعيل Firestore وقواعد الأمان.';
+          state.authError = 'تعذر الاتصال بقاعدة البيانات. تحقق من تفعيل Firestore وقواعد الأمان (Firestore Rules).';
           render();
           return;
         }
       }
-      resolveUserRole(user);
+      subscribeRoleChanges(user);
+      if(state.route==='login' || state.route==='pendingRole'){
+        state.route = state.currentRole==='pending' ? 'pendingRole' : 'dashboard';
+      }
+      render();
     } else {
       state.authUser = null;
       state.currentRole = 'pending';
