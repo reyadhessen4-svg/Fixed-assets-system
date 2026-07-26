@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام إدارة الأصول الثابتة والإهلاك</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --teal-950:#0B2422; --teal-900:#0F3532; --teal-800:#134A45; --teal-700:#186158; --teal-600:#1F7A6C;
+  --gold-600:#B8862E; --gold-500:#C9932B; --gold-400:#DDAA4E; --gold-100:#F6E9CF;
+  --green-600:#2E7D5B; --green-100:#E4F3EA;
+  --red-600:#B93B33; --red-100:#FBEAE8;
+  --amber-600:#B8791D; --amber-100:#FBEEDA;
+  --bg:#F6F4EE; --surface:#FFFFFF; --surface-2:#FBFAF6; --border:#E1DDD1; --border-strong:#CFC9B8;
+  --text:#1B2624; --text-2:#5B6663; --text-muted:#8B948F;
+  --radius:10px; --shadow:0 1px 2px rgba(15,53,50,.06), 0 4px 14px rgba(15,53,50,.05);
+}
+[data-theme="dark"]{
+  --bg:#0B1716; --surface:#122423; --surface-2:#0F1E1D; --border:#1E3634; --border-strong:#2A4341;
+  --text:#EAF0EE; --text-2:#AEBDB9; --text-muted:#78877F;
+  --green-100:#123329; --red-100:#3A1D1B; --amber-100:#3A2C14; --gold-100:#3A2E14;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Tajawal',sans-serif;font-size:14px;line-height:1.6;transition:background .2s,color .2s;}
+h1,h2,h3,.brand,.kpi-value,.section-title{font-family:'Cairo',sans-serif;}
+button{font-family:'Tajawal',sans-serif;cursor:pointer;}
+input,select,textarea{font-family:'Tajawal',sans-serif;}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:8px;}
+
+.app-shell{display:flex;min-height:100vh;}
+.sidebar{width:230px;flex-shrink:0;background:var(--teal-950);color:#E8F0EE;display:flex;flex-direction:column;padding:18px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;}
+[data-theme="dark"] .sidebar{background:#081514;}
+.brand{font-size:17px;font-weight:800;color:#fff;padding:6px 8px 4px;}
+.brand small{display:block;font-family:'Tajawal';font-weight:400;font-size:11px;color:var(--gold-400);margin-top:3px;}
+.nav-group{margin-top:18px;}
+.nav-label{font-size:10.5px;color:#7FA69C;padding:0 10px;margin-bottom:6px;letter-spacing:.5px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:#CFE3DE;text-decoration:none;font-size:13.5px;margin-bottom:2px;border:none;background:transparent;width:100%;text-align:right;}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff;}
+.nav-item.active{background:var(--gold-500);color:#241a05;font-weight:700;}
+.nav-icon{width:18px;text-align:center;font-size:14px;}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:5;}
+.topbar-title{font-size:16px;font-weight:700;}
+.topbar-actions{display:flex;align-items:center;gap:10px;}
+.company-switch select, .role-switch select{border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);padding:7px 10px;border-radius:8px;font-size:12.5px;}
+.icon-btn{border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;}
+.icon-btn:hover{border-color:var(--gold-500);}
+.content{padding:22px 24px 60px;max-width:1400px;width:100%;margin:0 auto;}
+
+.btn{border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);padding:9px 15px;border-radius:8px;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;}
+.btn:hover{border-color:var(--gold-500);}
+.btn-primary{background:var(--gold-500);border-color:var(--gold-500);color:#241a05;font-weight:700;}
+.btn-primary:hover{background:var(--gold-400);}
+.btn-danger{color:var(--red-600);border-color:var(--red-100);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow);}
+.grid{display:grid;gap:14px;}
+.grid-4{grid-template-columns:repeat(4,1fr);}
+.grid-3{grid-template-columns:repeat(3,1fr);}
+.grid-2{grid-template-columns:repeat(2,1fr);}
+@media(max-width:1100px){.grid-4{grid-template-columns:repeat(2,1fr);} .grid-3{grid-template-columns:repeat(2,1fr);}}
+
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+.kpi-label{font-size:12px;color:var(--text-2);margin-bottom:8px;}
+.kpi-value{font-size:22px;font-weight:800;}
+.kpi-sub{font-size:11px;color:var(--text-muted);margin-top:4px;}
+.kpi-bar{position:absolute;top:0;right:0;width:4px;height:100%;background:var(--gold-500);}
+
+.section-title{font-size:15px;font-weight:700;margin:26px 0 12px;display:flex;align-items:center;gap:8px;}
+.section-title .n{background:var(--teal-800);color:#fff;font-size:11px;padding:2px 8px;border-radius:20px;}
+
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:right;background:var(--surface-2);color:var(--text-2);font-weight:700;padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;font-size:12px;}
+td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:hover td{background:var(--surface-2);}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:var(--shadow);}
+.table-wrap table{min-width:700px;}
+
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}
+.badge-active{background:var(--green-100);color:var(--green-600);}
+.badge-disposed{background:var(--red-100);color:var(--red-600);}
+.badge-maintenance{background:var(--amber-100);color:var(--amber-600);}
+.badge-full{background:var(--gold-100);color:var(--gold-600);}
+
+.form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,1fr);}}
+.field label{display:block;font-size:12.5px;color:var(--text-2);margin-bottom:6px;font-weight:500;}
+.field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:13px;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--gold-400);outline-offset:1px;border-color:var(--gold-500);}
+.field textarea{resize:vertical;min-height:64px;}
+.field.span-2{grid-column:span 2;}
+.field.span-3{grid-column:span 3;}
+.hint{font-size:11px;color:var(--text-muted);margin-top:4px;}
+
+.filters-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:flex-end;}
+.filters-row .field{min-width:150px;}
+.search-box{position:relative;flex:1;min-width:220px;}
+.search-box input{width:100%;padding:9px 34px 9px 11px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-2);color:var(--text);}
+.search-box .ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-muted);}
+
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px;flex-wrap:wrap;}
+.tab{padding:9px 16px;border:none;background:transparent;color:var(--text-2);font-size:13.5px;border-bottom:2px solid transparent;font-weight:500;}
+.tab.active{color:var(--gold-600);border-color:var(--gold-500);font-weight:700;}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(11,36,34,.55);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:50;overflow-y:auto;}
+.modal{background:var(--surface);border-radius:14px;max-width:480px;width:100%;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.3);}
+.modal h3{margin:0 0 14px;font-size:16px;}
+.modal-actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-start;}
+
+.empty{text-align:center;padding:50px 20px;color:var(--text-muted);}
+.empty .ic{font-size:34px;margin-bottom:10px;}
+
+.ring-wrap{display:flex;align-items:center;gap:18px;}
+.ring-label{font-size:12px;color:var(--text-2);}
+.ring-value{font-size:20px;font-weight:800;}
+
+.pill-list{display:flex;gap:8px;flex-wrap:wrap;}
+.pill{background:var(--surface-2);border:1px solid var(--border);padding:6px 12px;border-radius:20px;font-size:12.5px;display:flex;align-items:center;gap:8px;}
+.pill button{border:none;background:none;color:var(--red-600);font-size:12px;}
+
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--teal-950);color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.3);}
+
+.stat-line{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px dashed var(--border);font-size:13px;}
+.stat-line:last-child{border-bottom:none;}
+.stat-line b{font-weight:700;}
+
+.perm-note{background:var(--amber-100);color:var(--amber-600);padding:9px 14px;border-radius:8px;font-size:12.5px;margin-bottom:14px;}
+
+@media print{
+  .sidebar,.topbar,.no-print{display:none !important;}
+  .main{width:100%;}
+  body{background:#fff;color:#000;}
+  .card,.table-wrap{box-shadow:none;border:1px solid #ccc;}
+}
+</style>
+</head>
+<body>
+<div id="toast-root"></div>
+<div class="app-shell" id="app"></div>
+
+<script type="module">
+/* ============ FIREBASE INIT ============ */
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+import {
+  getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
+  onSnapshot, query, orderBy
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  signOut, sendPasswordResetEmail
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCMEktQjxL5rIh-yDYL8M_VLpEmG9WgFUI",
+  authDomain: "fixed-assets-system-bb52e.firebaseapp.com",
+  projectId: "fixed-assets-system-bb52e",
+  storageBucket: "fixed-assets-system-bb52e.firebasestorage.app",
+  messagingSenderId: "529721958737",
+  appId: "1:529721958737:web:1fe3334a673752587d3370",
+  measurementId: "G-PG2GWYZ23L"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+const auth = getAuth(fbApp);
+
+/* ============ CONSTANTS ============ */
+const ICON = {
+  dashboard:'&#9632;', assets:'&#128188;', add:'&#10133;', categories:'&#128193;',
+  reports:'&#128202;', settings:'&#9881;', master:'&#127970;', search:'&#128269;',
+  sun:'&#9728;', moon:'&#127769;', edit:'&#9998;', trash:'&#128465;', view:'&#128065;',
+  print:'&#128424;', excel:'&#128190;', close:'&#10005;', back:'&#8594;'
+};
+const STATUS_LABELS = {active:'نشط', disposed:'مستبعد', maintenance:'تحت الصيانة'};
+const METHOD_LABELS = {straight_line:'القسط الثابت', declining_balance:'الرصيد المتناقص (قريباً)', double_declining:'الرصيد المتناقص المضاعف (قريباً)', units_of_production:'وحدات الإنتاج (قريباً)'};
+const ROLE_LABELS = {admin:'مدير النظام', finance_manager:'المدير المالي', accountant:'المحاسب', viewer:'قارئ فقط', pending:'بانتظار تفعيل الصلاحية', disabled:'الحساب معطل'};
+const PERMISSIONS = {
+  admin:{add:true, edit:true, del:true, approve:true, exportData:true, settings:true, manageUsers:true},
+  finance_manager:{add:true, edit:true, del:false, approve:true, exportData:true, settings:true, manageUsers:false},
+  accountant:{add:true, edit:true, del:false, approve:false, exportData:true, settings:false, manageUsers:false},
+  viewer:{add:false, edit:false, del:false, approve:false, exportData:true, settings:false, manageUsers:false},
+  pending:{add:false, edit:false, del:false, approve:false, exportData:false, settings:false, manageUsers:false},
+  disabled:{add:false, edit:false, del:false, approve:false, exportData:false, settings:false, manageUsers:false},
+};
+const DEFAULT_CATEGORIES = [
+  {id:'cat-buildings', name:'المباني', code:'BLD', order:1},
+  {id:'cat-improvements', name:'تحسينات المباني', code:'IMP', order:2},
+  {id:'cat-vehicles', name:'السيارات', code:'VEH', order:3},
+  {id:'cat-furniture', name:'الأثاث', code:'FUR', order:4},
+  {id:'cat-machinery', name:'الآلات والمعدات', code:'MEQ', order:5},
+];
+const DEFAULT_COMPANIES = [
+  {id:'co-zadaljood', name:'مؤسسة زاد الجود', code:'ZJ'},
+  {id:'co-qawafil5', name:'مؤسسة القوافل الخمسة', code:'QF'},
+];
+
+/* ============ STATE ============ */
+let state = {
+  route:'login', routeParam:null,
+  theme: (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark':'light'),
+  currentRole:'pending',
+  authUser:null, authReady:false, authError:'', authMode:'login', userDocsLoaded:false,
+  filterCompany:'all',
+  companies:[], categories:[], branches:[], departments:[], suppliers:[], assets:[], auditLogs:[], users:[],
+  settings:{ currency:'ريال سعودي (SAR)', decimals:2, fiscalYearStart:'01-01', numbering:'{COMPANY}-{CATEGORY}-{SEQ}', companyLogoNote:'' },
+  ready:false,
+  editingAssetId:null,
+  reportType:'monthly',
+  categoryModal:null, branchModal:null, deptModal:null, supplierModal:null, confirmModal:null,
+  newUserModal:null, newUserBusy:false, newUserMsg:'',
+};
+
+/* ============ FIRESTORE PERSISTENCE ============ */
+async function seedCollectionIfEmpty(colName, defaults){
+  const snap = await getDocs(collection(db, colName));
+  if(snap.empty && defaults && defaults.length){
+    for(const item of defaults){
+      const {id, ...rest} = item;
+      await setDoc(doc(db, colName, id), rest);
+    }
+  }
+}
+async function seedSettingsIfEmpty(){
+  const ref = doc(db,'settings','main');
+  const snap = await getDoc(ref);
+  if(!snap.exists()) await setDoc(ref, state.settings);
+}
+function listenCollection(colName, opts){
+  const base = collection(db, colName);
+  const q = (opts && opts.orderBy) ? query(base, orderBy(opts.orderBy, opts.direction||'asc')) : base;
+  onSnapshot(q, snap=>{
+    state[colName] = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    if(state.ready) render();
+  }, err=>{
+    console.error(colName, err);
+    if(state.authUser) showToast('تعذر الاتصال بقاعدة البيانات (' + colName + ')');
+  });
+}
+async function initFirestore(){
+  await seedCollectionIfEmpty('companies', DEFAULT_COMPANIES);
+  await seedCollectionIfEmpty('categories', DEFAULT_CATEGORIES);
+  await seedCollectionIfEmpty('branches', [{id:'br-main', name:'الفرع الرئيسي'}]);
+  await seedCollectionIfEmpty('departments', [{id:'dep-admin', name:'الإدارة العامة'}]);
+  await seedSettingsIfEmpty();
+
+  listenCollection('companies');
+  listenCollection('categories', {orderBy:'order'});
+  listenCollection('branches');
+  listenCollection('departments');
+  listenCollection('suppliers');
+  listenCollection('assets');
+  listenCollection('auditLogs', {orderBy:'ts', direction:'desc'});
+  onSnapshot(doc(db,'settings','main'), snap=>{
+    if(snap.exists()) state.settings = snap.data();
+    if(state.ready) render();
+  }, err=>console.error('settings', err));
+}
+
+/* ============ AUTHENTICATION ============ */
+let usersListenerStarted = false;
+function startUsersListenerIfNeeded(){
+  if(usersListenerStarted) return;
+  if(!(PERMISSIONS[state.currentRole]||{}).manageUsers) return;
+  usersListenerStarted = true;
+  listenCollection('users');
+}
+async function resolveUserRole(user){
+  const ref = doc(db,'users', user.uid);
+  onSnapshot(ref, async snap=>{
+    if(snap.exists()){
+      state.currentRole = snap.data().role || 'pending';
+    } else {
+      const usersSnap = await getDocs(collection(db,'users'));
+      if(usersSnap.empty){
+        await setDoc(ref, {email:user.email, role:'admin', createdAt:new Date().toISOString()});
+        state.currentRole = 'admin';
+      } else {
+        await setDoc(ref, {email:user.email, role:'pending', createdAt:new Date().toISOString()});
+        state.currentRole = 'pending';
+      }
+    }
+    startUsersListenerIfNeeded();
+    if(state.route==='login' || state.route==='pendingRole'){
+      state.route = state.currentRole==='pending' ? 'pendingRole' : 'dashboard';
+    }
+    if(state.currentRole!=='pending' && state.route==='pendingRole') state.route='dashboard';
+    render();
+  }, err=>console.error('user role', err));
+}
+let firestoreInited = false;
+function handleAuth(){
+  onAuthStateChanged(auth, async user=>{
+    state.authReady = true;
+    if(user){
+      state.authUser = {uid:user.uid, email:user.email};
+      if(!firestoreInited){
+        firestoreInited = true;
+        try{ await initFirestore(); state.ready = true; }
+        catch(e){
+          console.error('Firestore init failed', e);
+          state.authError = 'تعذر الاتصال بقاعدة البيانات. تحقق من تفعيل Firestore وقواعد الأمان.';
+          render();
+          return;
+        }
+      }
+      resolveUserRole(user);
+    } else {
+      state.authUser = null;
+      state.currentRole = 'pending';
+      state.route = 'login';
+      render();
+    }
+  });
+}
+async function adminCreateUser(email, password, role){
+  const secondaryApp = initializeApp(firebaseConfig, 'secondary-'+Date.now());
+  const secondaryAuth = getAuth(secondaryApp);
+  try{
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    await setDoc(doc(db,'users', cred.user.uid), {email, role, createdAt:new Date().toISOString()});
+    await signOut(secondaryAuth);
+    await deleteApp(secondaryApp);
+    return {ok:true};
+  }catch(e){
+    try{ await deleteApp(secondaryApp); }catch(_e){}
+    return {ok:false, error:e.message};
+  }
+}
+function log(action, target){
+  addDoc(collection(db,'auditLogs'), { ts:new Date().toISOString(), role:state.currentRole, action, target })
+    .catch(e=>console.error('log failed', e));
+}
+
+/* ============ UTILS ============ */
+function uid(){ return 'x'+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
+function fmtMoney(n){
+  if(n===undefined||n===null||isNaN(n)) n=0;
+  return Number(n).toLocaleString('en-US',{minimumFractionDigits:state.settings.decimals,maximumFractionDigits:state.settings.decimals});
+}
+function fmtDate(d){ if(!d) return '—'; const dt=new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('en-GB'); }
+function monthLabel(d){ const dt=new Date(d); return dt.toLocaleDateString('ar-SA',{month:'long',year:'numeric'}); }
+function addMonths(date, n){ const d=new Date(date); d.setMonth(d.getMonth()+n); return d; }
+function monthsBetween(a,b){ const d1=new Date(a), d2=new Date(b); return (d2.getFullYear()-d1.getFullYear())*12 + (d2.getMonth()-d1.getMonth()); }
+function companyName(id){ const c=state.companies.find(x=>x.id===id); return c?c.name:'—'; }
+function companyCode(id){ const c=state.companies.find(x=>x.id===id); return c?c.code:'GEN'; }
+function categoryName(id){ const c=state.categories.find(x=>x.id===id); return c?c.name:'—'; }
+function categoryCode(id){ const c=state.categories.find(x=>x.id===id); return c?c.code:'GEN'; }
+function branchName(id){ const b=state.branches.find(x=>x.id===id); return b?b.name:'—'; }
+function deptName(id){ const d=state.departments.find(x=>x.id===id); return d?d.name:'—'; }
+function supplierName(id){ const s=state.suppliers.find(x=>x.id===id); return s?s.name:'—'; }
+function perm(){ return PERMISSIONS[state.currentRole] || PERMISSIONS.pending; }
+function visibleAssets(){
+  return state.assets.filter(a => state.filterCompany==='all' || a.companyId===state.filterCompany);
+}
+
+function generateAssetCode(companyId, categoryId){
+  const cc = companyCode(companyId), cat = categoryCode(categoryId);
+  const existing = state.assets.filter(a=>a.companyId===companyId && a.categoryId===categoryId).length;
+  const seq = String(existing+1).padStart(4,'0');
+  return `${cc}-${cat}-${seq}`;
+}
+
+/* depreciation engine */
+function usefulLifeMonths(asset){ return Math.max(1, Math.round(Number(asset.usefulLifeYears||0)*12)); }
+function monthlyDepreciation(asset){
+  const cost = Number(asset.cost||0), residual = Number(asset.residualValue||0);
+  const months = usefulLifeMonths(asset);
+  return (cost - residual) / months;
+}
+function buildSchedule(asset){
+  const months = usefulLifeMonths(asset);
+  const monthlyDep = monthlyDepreciation(asset);
+  const cost = Number(asset.cost||0), residual = Number(asset.residualValue||0);
+  const depBase = cost - residual;
+  const rows = [];
+  let accumulated = 0;
+  const start = asset.depreciationStartDate || asset.purchaseDate;
+  for(let i=1;i<=months;i++){
+    let dep = monthlyDep;
+    accumulated += dep;
+    if(accumulated > depBase || i===months){ accumulated = depBase; dep = depBase - (accumulated - dep); dep = Math.max(0, dep); }
+    accumulated = Math.min(accumulated, depBase);
+    rows.push({ n:i, date: addMonths(start, i-1).toISOString(), monthly: monthlyDep, accumulated: accumulated, bookValue: cost - accumulated });
+  }
+  return rows;
+}
+function asOfToday(asset, refDate){
+  refDate = refDate || new Date();
+  const start = new Date(asset.depreciationStartDate || asset.purchaseDate);
+  const months = usefulLifeMonths(asset);
+  let elapsed = monthsBetween(start, refDate) + 1;
+  elapsed = Math.max(0, Math.min(elapsed, months));
+  const cost = Number(asset.cost||0), residual = Number(asset.residualValue||0);
+  const depBase = cost - residual;
+  const monthlyDep = monthlyDepreciation(asset);
+  let accumulated = elapsed>=months ? depBase : monthlyDep*elapsed;
+  accumulated = Math.min(accumulated, depBase);
+  const bookValue = cost - accumulated;
+  const remainingMonths = Math.max(0, months - elapsed);
+  const rate = depBase>0 ? (accumulated/depBase*100) : 100;
+  return { monthsElapsed:elapsed, monthsTotal:months, monthsRemaining:remainingMonths, accumulated, bookValue, rate: Math.min(100,rate), monthlyDep, fullyDepreciated: elapsed>=months };
+}
+
+/* ============ TOAST ============ */
+let toastTimer=null;
+function showToast(msg){
+  const root = document.getElementById('toast-root');
+  root.innerHTML = `<div class="toast">${msg}</div>`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ root.innerHTML=''; }, 2600);
+}
+
+/* ============ RENDER ROOT ============ */
+function nav(route, param){ state.route=route; state.routeParam=param||null; render(); }
+
+function render(){
+  document.documentElement.setAttribute('data-theme', state.theme);
+  const app = document.getElementById('app');
+  if(state.authError){
+    app.innerHTML = renderAuthErrorScreen();
+    attachGlobalEvents(); return;
+  }
+  if(!state.authReady){
+    app.innerHTML = '<div style="padding:60px;text-align:center;color:var(--text-2);">جارِ التحقق من تسجيل الدخول...</div>';
+    return;
+  }
+  if(!state.authUser){
+    app.innerHTML = renderLoginScreen();
+    attachGlobalEvents(); bindLoginEvents(); return;
+  }
+  if(state.currentRole==='pending'){
+    app.innerHTML = renderPendingScreen();
+    attachGlobalEvents(); bindPendingEvents(); return;
+  }
+  if(state.currentRole==='disabled'){
+    app.innerHTML = renderDisabledScreen();
+    attachGlobalEvents(); bindPendingEvents(); return;
+  }
+  app.innerHTML = `
+    ${renderSidebar()}
+    <div class="main">
+      ${renderTopbar()}
+      <div class="content">${renderRoute()}</div>
+    </div>
+  `;
+  attachGlobalEvents();
+  runRouteScripts();
+}
+
+function renderSidebar(){
+  const items = [
+    {r:'dashboard', label:'لوحة التحكم', ic:ICON.dashboard},
+    {r:'assets', label:'الأصول', ic:ICON.assets},
+    {r:'assetForm', label:'إضافة أصل جديد', ic:ICON.add},
+    {r:'categories', label:'التصنيفات', ic:ICON.categories},
+    {r:'masterdata', label:'الفروع والإدارات والموردين', ic:ICON.master},
+    {r:'reports', label:'التقارير', ic:ICON.reports},
+    {r:'settings', label:'الإعدادات', ic:ICON.settings},
+  ];
+  if(perm().manageUsers) items.push({r:'users', label:'المستخدمون والصلاحيات', ic:'&#128100;'});
+  return `
+  <div class="sidebar">
+    <div class="brand">نظام الأصول الثابتة<small>إدارة الإهلاك المحاسبي</small></div>
+    <div class="nav-group">
+      <div class="nav-label">القوائم</div>
+      ${items.map(it=>`<button class="nav-item ${state.route===it.r?'active':''}" data-nav="${it.r}"><span class="nav-icon">${it.ic}</span>${it.label}</button>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderTopbar(){
+  const titles = {dashboard:'لوحة التحكم', assets:'قائمة الأصول', assetForm: state.editingAssetId?'تعديل الأصل':'إضافة أصل جديد', assetCard:'بطاقة الأصل', categories:'تصنيفات الأصول', masterdata:'البيانات الأساسية', reports:'التقارير', settings:'الإعدادات', users:'المستخدمون والصلاحيات'};
+  return `
+  <div class="topbar">
+    <div class="topbar-title">${titles[state.route]||''}</div>
+    <div class="topbar-actions">
+      <div class="company-switch">
+        <select id="companyFilter">
+          <option value="all" ${state.filterCompany==='all'?'selected':''}>كل الشركات</option>
+          ${state.companies.map(c=>`<option value="${c.id}" ${state.filterCompany===c.id?'selected':''}>${c.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="pill" style="background:var(--surface-2);">
+        <span>${state.authUser?state.authUser.email:''}</span>
+        <span class="badge badge-active" style="margin-inline-start:4px;">${ROLE_LABELS[state.currentRole]}</span>
+      </div>
+      <button class="icon-btn" id="themeToggle" aria-label="تبديل الوضع">${state.theme==='dark'?ICON.sun:ICON.moon}</button>
+      <button class="btn btn-sm" id="logoutBtn">تسجيل الخروج</button>
+    </div>
+  </div>`;
+}
+
+function renderRoute(){
+  switch(state.route){
+    case 'dashboard': return renderDashboard();
+    case 'assets': return renderAssetsList();
+    case 'assetForm': return renderAssetForm();
+    case 'assetCard': return renderAssetCard(state.routeParam);
+    case 'categories': return renderCategories();
+    case 'masterdata': return renderMasterData();
+    case 'reports': return renderReports();
+    case 'settings': return renderSettings();
+    case 'users': return renderUsers();
+    default: return '';
+  }
+}
+
+/* ============ DASHBOARD ============ */
+function renderDashboard(){
+  const assets = visibleAssets();
+  const totalCost = assets.reduce((s,a)=>s+Number(a.cost||0),0);
+  let totalAccum=0, totalBook=0, monthDep=0, yearDep=0;
+  const now = new Date();
+  const byCategory={}, byCompany={};
+  assets.forEach(a=>{
+    const info = asOfToday(a);
+    totalAccum += info.accumulated; totalBook += info.bookValue;
+    byCategory[a.categoryId] = (byCategory[a.categoryId]||0)+1;
+    byCompany[a.companyId] = (byCompany[a.companyId]||0)+1;
+    const sched = buildSchedule(a);
+    sched.forEach(row=>{
+      const d = new Date(row.date);
+      if(d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth()) monthDep += row.monthly;
+      if(d.getFullYear()===now.getFullYear()) yearDep += row.monthly;
+    });
+  });
+  if(assets.length===0){
+    return `<div class="empty card"><div class="ic">${ICON.assets}</div><h3>لا توجد أصول بعد</h3><p>ابدأ بإضافة أول أصل ثابت للمؤسسة لعرض الإحصائيات هنا.</p><button class="btn btn-primary" data-nav="assetForm">${ICON.add} إضافة أصل جديد</button></div>`;
+  }
+  return `
+  <div class="grid grid-4">
+    <div class="kpi"><div class="kpi-bar"></div><div class="kpi-label">إجمالي تكلفة الأصول</div><div class="kpi-value">${fmtMoney(totalCost)}</div><div class="kpi-sub">${state.settings.currency}</div></div>
+    <div class="kpi"><div class="kpi-bar"></div><div class="kpi-label">إجمالي مجمع الإهلاك</div><div class="kpi-value">${fmtMoney(totalAccum)}</div><div class="kpi-sub">حتى تاريخه</div></div>
+    <div class="kpi"><div class="kpi-bar"></div><div class="kpi-label">صافي القيمة الدفترية</div><div class="kpi-value">${fmtMoney(totalBook)}</div><div class="kpi-sub">${state.settings.currency}</div></div>
+    <div class="kpi"><div class="kpi-bar"></div><div class="kpi-label">عدد الأصول</div><div class="kpi-value">${assets.length}</div><div class="kpi-sub">${state.categories.length} تصنيف</div></div>
+  </div>
+  <div class="grid grid-2" style="margin-top:14px;">
+    <div class="kpi"><div class="kpi-bar"></div><div class="kpi-label">إهلاك هذا الشهر — ${monthLabel(now)}</div><div class="kpi-value">${fmtMoney(monthDep)}</div></div>
+    <div class="kpi"><div class="kpi-bar"></div><div class="kpi-label">إهلاك هذه السنة — ${now.getFullYear()}</div><div class="kpi-value">${fmtMoney(yearDep)}</div></div>
+  </div>
+  <div class="grid grid-2" style="margin-top:22px;">
+    <div class="card">
+      <div class="section-title">توزيع الأصول حسب التصنيف</div>
+      <div style="position:relative;height:230px;"><canvas id="chartCategory" role="img" aria-label="مخطط دائري لعدد الأصول حسب التصنيف">${Object.keys(byCategory).map(k=>categoryName(k)+': '+byCategory[k]).join('، ')}</canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-title">توزيع الأصول حسب الشركة</div>
+      <div style="position:relative;height:230px;"><canvas id="chartCompany" role="img" aria-label="مخطط أعمدة لعدد الأصول حسب الشركة">${Object.keys(byCompany).map(k=>companyName(k)+': '+byCompany[k]).join('، ')}</canvas></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <div class="section-title">اتجاه الإهلاك الشهري خلال السنة الحالية</div>
+    <div style="position:relative;height:260px;"><canvas id="chartTrend" role="img" aria-label="مخطط خطي لاتجاه الإهلاك الشهري">بيانات الإهلاك الشهري للسنة الحالية</canvas></div>
+  </div>
+  `;
+}
+function drawDashboardCharts(){
+  const assets = visibleAssets();
+  if(assets.length===0) return;
+  const cove = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+  const byCategory={};
+  assets.forEach(a=>{ byCategory[a.categoryId]=(byCategory[a.categoryId]||0)+1; });
+  const catLabels = Object.keys(byCategory).map(categoryName);
+  const catData = Object.values(byCategory);
+  const elCat = document.getElementById('chartCategory');
+  if(elCat){
+    new Chart(elCat, { type:'doughnut', data:{ labels:catLabels, datasets:[{data:catData, backgroundColor:cove.slice(0,catLabels.length), borderColor:getComputedStyle(document.documentElement).getPropertyValue('--surface'), borderWidth:2}]},
+      options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}} });
+  }
+  const byCompany={};
+  assets.forEach(a=>{ byCompany[a.companyId]=(byCompany[a.companyId]||0)+1; });
+  const coLabels = Object.keys(byCompany).map(companyName);
+  const coData = Object.values(byCompany);
+  const elCo = document.getElementById('chartCompany');
+  if(elCo){
+    new Chart(elCo, { type:'bar', data:{ labels:coLabels, datasets:[{data:coData, backgroundColor:'#2a78d6', borderRadius:4, maxBarThickness:46}]},
+      options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{precision:0}}}} });
+  }
+  const now = new Date();
+  const monthly = Array(12).fill(0);
+  assets.forEach(a=>{
+    buildSchedule(a).forEach(row=>{
+      const d = new Date(row.date);
+      if(d.getFullYear()===now.getFullYear()) monthly[d.getMonth()] += row.monthly;
+    });
+  });
+  const monthNames = ['ينا','فبر','مار','أبر','ماي','يون','يول','أغس','سبت','أكت','نوف','ديس'];
+  const elTrend = document.getElementById('chartTrend');
+  if(elTrend){
+    new Chart(elTrend, { type:'line', data:{ labels:monthNames, datasets:[{data:monthly, borderColor:'#1baf7a', backgroundColor:'rgba(27,175,122,.1)', fill:true, tension:.3, pointRadius:3}]},
+      options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}} });
+  }
+}
+
+/* ============ ASSETS LIST ============ */
+function renderAssetsList(){
+  const assets = visibleAssets();
+  const q = (state._searchQ||'').trim().toLowerCase();
+  const fc = state._flCategory||'all', fb=state._flBranch||'all', fd=state._flDept||'all', fs=state._flStatus||'all';
+  let filtered = assets.filter(a=>{
+    if(fc!=='all' && a.categoryId!==fc) return false;
+    if(fb!=='all' && a.branchId!==fb) return false;
+    if(fd!=='all' && a.departmentId!==fd) return false;
+    if(fs!=='all' && a.status!==fs) return false;
+    if(q){
+      const hay = [a.code,a.name,companyName(a.companyId),categoryName(a.categoryId),branchName(a.branchId),deptName(a.departmentId),supplierName(a.supplierId)].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  return `
+  <div class="filters-row">
+    <div class="search-box"><span class="ic">${ICON.search}</span><input id="searchQ" placeholder="بحث بالاسم، الكود، المورد..." value="${state._searchQ||''}"></div>
+    <div class="field"><label>التصنيف</label><select id="flCategory"><option value="all">الكل</option>${state.categories.map(c=>`<option value="${c.id}" ${fc===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
+    <div class="field"><label>الفرع</label><select id="flBranch"><option value="all">الكل</option>${state.branches.map(b=>`<option value="${b.id}" ${fb===b.id?'selected':''}>${b.name}</option>`).join('')}</select></div>
+    <div class="field"><label>الإدارة</label><select id="flDept"><option value="all">الكل</option>${state.departments.map(d=>`<option value="${d.id}" ${fd===d.id?'selected':''}>${d.name}</option>`).join('')}</select></div>
+    <div class="field"><label>الحالة</label><select id="flStatus"><option value="all">الكل</option>${Object.keys(STATUS_LABELS).map(s=>`<option value="${s}" ${fs===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('')}</select></div>
+    <button class="btn btn-primary" data-nav="assetForm">${ICON.add} أصل جديد</button>
+  </div>
+  ${filtered.length===0? `<div class="empty card"><div class="ic">${ICON.search}</div><h3>لا توجد نتائج</h3><p>جرّب تعديل الفلاتر أو كلمة البحث.</p></div>` : `
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>الكود</th><th>اسم الأصل</th><th>الشركة</th><th>التصنيف</th><th>التكلفة</th><th>القيمة الدفترية</th><th>نسبة الإهلاك</th><th>الحالة</th><th></th></tr></thead>
+    <tbody>
+    ${filtered.map(a=>{
+      const info = asOfToday(a);
+      return `<tr>
+        <td>${a.code}</td>
+        <td>${a.name}</td>
+        <td>${companyName(a.companyId)}</td>
+        <td>${categoryName(a.categoryId)}</td>
+        <td>${fmtMoney(a.cost)}</td>
+        <td>${fmtMoney(info.bookValue)}</td>
+        <td>${info.rate.toFixed(1)}%</td>
+        <td>${info.fullyDepreciated? `<span class="badge badge-full">مستهلك بالكامل</span>` : `<span class="badge badge-${a.status}">${STATUS_LABELS[a.status]}</span>`}</td>
+        <td style="white-space:nowrap;">
+          <button class="icon-btn btn-sm" data-view="${a.id}" aria-label="عرض">${ICON.view}</button>
+          ${perm().edit?`<button class="icon-btn btn-sm" data-edit="${a.id}" aria-label="تعديل">${ICON.edit}</button>`:''}
+          ${perm().del?`<button class="icon-btn btn-sm" data-del="${a.id}" aria-label="حذف">${ICON.trash}</button>`:''}
+        </td>
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table>
+  </div>`}
+  <p class="hint" style="margin-top:10px;">إجمالي النتائج: ${filtered.length} من ${assets.length} أصل</p>
+  `;
+}
+
+/* ============ ASSET FORM ============ */
+function renderAssetForm(){
+  const editing = state.editingAssetId ? state.assets.find(a=>a.id===state.editingAssetId) : null;
+  const a = editing || { id:null, code:'', name:'', description:'', companyId: state.companies[0]?.id||'', categoryId: state.categories[0]?.id||'', branchId: state.branches[0]?.id||'', departmentId: state.departments[0]?.id||'', custodian:'', supplierId:'', invoiceNo:'', purchaseDate: new Date().toISOString().slice(0,10), depreciationStartDate:new Date().toISOString().slice(0,10), cost:'', residualValue:0, usefulLifeYears:5, depreciationMethod:'straight_line', status:'active', location:'', serialNumber:'', notes:'', attachments:[] };
+  if(!editing && !state._draftCode){ state._draftCode = generateAssetCode(a.companyId, a.categoryId); }
+  const codeVal = editing ? a.code : (state._draftCode || generateAssetCode(a.companyId, a.categoryId));
+  if(!perm().add && !editing){
+    return `<div class="perm-note">صلاحيتك الحالية (${ROLE_LABELS[state.currentRole]}) لا تسمح بإضافة أصول جديدة.</div>`;
+  }
+  if(editing && !perm().edit){
+    return `<div class="perm-note">صلاحيتك الحالية (${ROLE_LABELS[state.currentRole]}) لا تسمح بتعديل الأصول.</div>`;
+  }
+  return `
+  <form id="assetForm" class="card">
+    <div class="form-grid">
+      <div class="field"><label>كود الأصل</label><input name="code" value="${codeVal}"></div>
+      <div class="field span-2"><label>اسم الأصل *</label><input name="name" required value="${a.name}"></div>
+
+      <div class="field"><label>الشركة *</label><select name="companyId" id="fCompany">${state.companies.map(c=>`<option value="${c.id}" ${a.companyId===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
+      <div class="field"><label>التصنيف *</label><select name="categoryId" id="fCategory">${state.categories.slice().sort((x,y)=>x.order-y.order).map(c=>`<option value="${c.id}" ${a.categoryId===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
+      <div class="field"><label>الفرع</label><select name="branchId">${state.branches.map(b=>`<option value="${b.id}" ${a.branchId===b.id?'selected':''}>${b.name}</option>`).join('')}</select></div>
+
+      <div class="field"><label>الإدارة</label><select name="departmentId">${state.departments.map(d=>`<option value="${d.id}" ${a.departmentId===d.id?'selected':''}>${d.name}</option>`).join('')}</select></div>
+      <div class="field"><label>المسؤول عن الأصل</label><input name="custodian" value="${a.custodian}"></div>
+      <div class="field"><label>المورد</label><select name="supplierId"><option value="">— بدون —</option>${state.suppliers.map(s=>`<option value="${s.id}" ${a.supplierId===s.id?'selected':''}>${s.name}</option>`).join('')}</select></div>
+
+      <div class="field"><label>رقم الفاتورة</label><input name="invoiceNo" value="${a.invoiceNo}"></div>
+      <div class="field"><label>تاريخ الشراء</label><input type="date" name="purchaseDate" value="${a.purchaseDate?a.purchaseDate.slice(0,10):''}"></div>
+      <div class="field"><label>تاريخ بدء الإهلاك</label><input type="date" name="depreciationStartDate" value="${a.depreciationStartDate?a.depreciationStartDate.slice(0,10):''}"></div>
+
+      <div class="field"><label>تكلفة الأصل *</label><input type="number" step="0.01" name="cost" required value="${a.cost}"></div>
+      <div class="field"><label>القيمة التخريدية</label><input type="number" step="0.01" name="residualValue" value="${a.residualValue}"></div>
+      <div class="field"><label>العمر الافتراضي (سنوات) *</label><input type="number" step="0.5" name="usefulLifeYears" required value="${a.usefulLifeYears}"></div>
+
+      <div class="field"><label>طريقة الإهلاك</label><select name="depreciationMethod">${Object.keys(METHOD_LABELS).map(m=>`<option value="${m}" ${a.depreciationMethod===m?'selected':''} ${m!=='straight_line'?'disabled':''}>${METHOD_LABELS[m]}</option>`).join('')}</select></div>
+      <div class="field"><label>حالة الأصل</label><select name="status">${Object.keys(STATUS_LABELS).map(s=>`<option value="${s}" ${a.status===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('')}</select></div>
+      <div class="field"><label>الموقع</label><input name="location" value="${a.location}"></div>
+
+      <div class="field"><label>الرقم التسلسلي</label><input name="serialNumber" value="${a.serialNumber}"></div>
+      <div class="field span-2"><label>الوصف</label><input name="description" value="${a.description}"></div>
+
+      <div class="field span-3"><label>ملاحظات</label><textarea name="notes">${a.notes||''}</textarea></div>
+
+      <div class="field span-3">
+        <label>المرفقات (فاتورة الشراء، صور الأصل، ملفات الضمان)</label>
+        <input type="file" id="attachInput" multiple>
+        <div class="hint">هذا العرض التجريبي يسجل أسماء الملفات فقط دون رفعها فعلياً إلى خادم؛ الربط بتخزين ملفات حقيقي يتطلب نظام خلفي (Backend).</div>
+        <div class="pill-list" id="attachList" style="margin-top:8px;">${(a.attachments||[]).map((f,i)=>`<span class="pill">${f}<button type="button" data-rm-attach="${i}">${ICON.close}</button></span>`).join('')}</div>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button type="submit" class="btn btn-primary">${editing?'حفظ التعديلات':'حفظ الأصل'}</button>
+      <button type="button" class="btn" data-nav="assets">إلغاء</button>
+    </div>
+  </form>
+  `;
+}
+
+/* ============ ASSET CARD ============ */
+function renderAssetCard(id){
+  const a = state.assets.find(x=>x.id===id);
+  if(!a) return `<div class="empty card"><h3>الأصل غير موجود</h3><button class="btn" data-nav="assets">${ICON.back} رجوع للقائمة</button></div>`;
+  const info = asOfToday(a);
+  const schedule = buildSchedule(a);
+  const circumference = 2*Math.PI*42;
+  const dash = circumference * (info.rate/100);
+  return `
+  <button class="btn btn-sm no-print" data-nav="assets" style="margin-bottom:14px;">${ICON.back} رجوع للقائمة</button>
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="section-title">بيانات الأصل — ${a.name}</div>
+      <div class="stat-line"><span>الكود</span><b>${a.code}</b></div>
+      <div class="stat-line"><span>الشركة</span><b>${companyName(a.companyId)}</b></div>
+      <div class="stat-line"><span>التصنيف</span><b>${categoryName(a.categoryId)}</b></div>
+      <div class="stat-line"><span>الفرع / الإدارة</span><b>${branchName(a.branchId)} / ${deptName(a.departmentId)}</b></div>
+      <div class="stat-line"><span>المسؤول</span><b>${a.custodian||'—'}</b></div>
+      <div class="stat-line"><span>المورد</span><b>${supplierName(a.supplierId)||'—'}</b></div>
+      <div class="stat-line"><span>رقم الفاتورة</span><b>${a.invoiceNo||'—'}</b></div>
+      <div class="stat-line"><span>تاريخ الشراء</span><b>${fmtDate(a.purchaseDate)}</b></div>
+      <div class="stat-line"><span>تاريخ بدء الإهلاك</span><b>${fmtDate(a.depreciationStartDate)}</b></div>
+      <div class="stat-line"><span>الرقم التسلسلي</span><b>${a.serialNumber||'—'}</b></div>
+      <div class="stat-line"><span>الموقع</span><b>${a.location||'—'}</b></div>
+      <div class="stat-line"><span>طريقة الإهلاك</span><b>${METHOD_LABELS[a.depreciationMethod]}</b></div>
+      <div class="stat-line"><span>الحالة</span><b><span class="badge badge-${a.status}">${STATUS_LABELS[a.status]}</span></b></div>
+      ${a.notes?`<div class="stat-line"><span>ملاحظات</span><b>${a.notes}</b></div>`:''}
+    </div>
+    <div class="card">
+      <div class="section-title">ملخص الإهلاك</div>
+      <div class="ring-wrap">
+        <svg width="100" height="100" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border)" stroke-width="10"/>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="var(--gold-500)" stroke-width="10" stroke-linecap="round" stroke-dasharray="${dash.toFixed(1)} ${circumference.toFixed(1)}" transform="rotate(-90 50 50)"/>
+          <text x="50" y="55" text-anchor="middle" font-size="18" font-weight="700" fill="var(--text)">${info.rate.toFixed(0)}%</text>
+        </svg>
+        <div>
+          <div class="ring-label">نسبة الإهلاك المكتمل</div>
+          <div class="ring-value">${info.fullyDepreciated?'مستهلك بالكامل':(info.rate.toFixed(1)+'%')}</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <div class="stat-line"><span>تكلفة الأصل</span><b>${fmtMoney(a.cost)}</b></div>
+        <div class="stat-line"><span>القيمة التخريدية</span><b>${fmtMoney(a.residualValue)}</b></div>
+        <div class="stat-line"><span>إجمالي الإهلاك حتى اليوم</span><b>${fmtMoney(info.accumulated)}</b></div>
+        <div class="stat-line"><span>صافي القيمة الحالية</span><b>${fmtMoney(info.bookValue)}</b></div>
+        <div class="stat-line"><span>العمر الافتراضي</span><b>${info.monthsTotal} شهر</b></div>
+        <div class="stat-line"><span>الأشهر المستهلكة</span><b>${info.monthsElapsed} شهر</b></div>
+        <div class="stat-line"><span>الأشهر المتبقية</span><b>${info.monthsRemaining} شهر</b></div>
+      </div>
+    </div>
+  </div>
+  <div class="section-title">جدول الإهلاك الكامل <span class="n">${schedule.length} شهر</span></div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>#</th><th>الشهر</th><th>الإهلاك الشهري</th><th>الإهلاك المتراكم</th><th>القيمة الدفترية</th></tr></thead>
+    <tbody>
+    ${schedule.map(r=>`<tr><td>${r.n}</td><td>${monthLabel(r.date)}</td><td>${fmtMoney(r.monthly)}</td><td>${fmtMoney(r.accumulated)}</td><td>${fmtMoney(r.bookValue)}</td></tr>`).join('')}
+    </tbody>
+  </table>
+  </div>
+  <div class="modal-actions no-print" style="margin-top:14px;">
+    <button class="btn" id="printCard">${ICON.print} طباعة بطاقة الأصل</button>
+  </div>
+  `;
+}
+
+/* ============ CATEGORIES ============ */
+function renderCategories(){
+  const usedIds = new Set(state.assets.map(a=>a.categoryId));
+  const cats = state.categories.slice().sort((a,b)=>a.order-b.order);
+  return `
+  <div class="modal-actions" style="margin-bottom:16px;">${perm().add?`<button class="btn btn-primary" id="addCategoryBtn">${ICON.add} تصنيف جديد</button>`:''}</div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>الترتيب</th><th>الاسم</th><th>الرمز</th><th>عدد الأصول</th><th></th></tr></thead>
+    <tbody>
+    ${cats.map((c,i)=>`<tr>
+      <td>
+        <button class="icon-btn btn-sm" data-cat-up="${c.id}" ${i===0?'disabled':''} aria-label="أعلى">&uarr;</button>
+        <button class="icon-btn btn-sm" data-cat-down="${c.id}" ${i===cats.length-1?'disabled':''} aria-label="أسفل">&darr;</button>
+      </td>
+      <td>${c.name}</td>
+      <td>${c.code}</td>
+      <td>${state.assets.filter(a=>a.categoryId===c.id).length}</td>
+      <td>
+        ${perm().edit?`<button class="icon-btn btn-sm" data-cat-edit="${c.id}">${ICON.edit}</button>`:''}
+        ${perm().del?`<button class="icon-btn btn-sm" data-cat-del="${c.id}" ${usedIds.has(c.id)?'disabled title="مرتبط بأصول"':''}>${ICON.trash}</button>`:''}
+      </td>
+    </tr>`).join('')}
+    </tbody>
+  </table>
+  </div>
+  ${renderCategoryModal()}
+  `;
+}
+function renderCategoryModal(){
+  if(!state.categoryModal) return '';
+  const editing = state.categoryModal.id ? state.categories.find(c=>c.id===state.categoryModal.id) : {name:'',code:''};
+  return `
+  <div class="modal-overlay" id="catModalOverlay">
+    <div class="modal">
+      <h3>${state.categoryModal.id?'تعديل تصنيف':'تصنيف جديد'}</h3>
+      <form id="catForm">
+        <div class="field" style="margin-bottom:10px;"><label>اسم التصنيف *</label><input name="name" required value="${editing.name}"></div>
+        <div class="field"><label>الرمز (يستخدم في ترقيم الأصول)</label><input name="code" required maxlength="6" value="${editing.code}"></div>
+        <div class="modal-actions"><button type="submit" class="btn btn-primary">حفظ</button><button type="button" class="btn" id="closeCatModal">إلغاء</button></div>
+      </form>
+    </div>
+  </div>`;
+}
+
+/* ============ MASTER DATA (branches / departments / suppliers) ============ */
+function renderMasterData(){
+  const tab = state._masterTab || 'branches';
+  return `
+  <div class="tabs">
+    <button class="tab ${tab==='branches'?'active':''}" data-mtab="branches">الفروع</button>
+    <button class="tab ${tab==='departments'?'active':''}" data-mtab="departments">الإدارات</button>
+    <button class="tab ${tab==='suppliers'?'active':''}" data-mtab="suppliers">الموردون</button>
+  </div>
+  ${tab==='branches'?renderSimpleList('branches','الفرع', state.branches):''}
+  ${tab==='departments'?renderSimpleList('departments','الإدارة', state.departments):''}
+  ${tab==='suppliers'?renderSimpleList('suppliers','المورد', state.suppliers, true):''}
+  `;
+}
+function renderSimpleList(key, label, items, withContact){
+  return `
+  <div class="modal-actions" style="margin-bottom:16px;">${perm().add?`<button class="btn btn-primary" data-add-simple="${key}">${ICON.add} إضافة ${label}</button>`:''}</div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>الاسم</th>${withContact?'<th>جهة الاتصال</th>':''}<th>عدد الأصول المرتبطة</th><th></th></tr></thead>
+    <tbody>${items.length===0?`<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">لا توجد بيانات بعد</td></tr>`:items.map(it=>{
+      const idField = key==='branches'?'branchId':(key==='departments'?'departmentId':'supplierId');
+      const cnt = state.assets.filter(a=>a[idField]===it.id).length;
+      return `<tr><td>${it.name}</td>${withContact?`<td>${it.contact||'—'}</td>`:''}<td>${cnt}</td><td>
+        ${perm().edit?`<button class="icon-btn btn-sm" data-edit-simple="${key}:${it.id}">${ICON.edit}</button>`:''}
+        ${perm().del?`<button class="icon-btn btn-sm" data-del-simple="${key}:${it.id}" ${cnt>0?'disabled title="مرتبط بأصول"':''}>${ICON.trash}</button>`:''}
+      </td></tr>`;
+    }).join('')}</tbody>
+  </table></div>
+  ${renderSimpleModal(key, label, withContact)}
+  `;
+}
+function renderSimpleModal(key,label,withContact){
+  const modalState = state[key+'Modal'];
+  if(!modalState) return '';
+  const list = state[key];
+  const editing = modalState.id ? list.find(x=>x.id===modalState.id) : {name:'',contact:''};
+  return `
+  <div class="modal-overlay" id="simpleModalOverlay">
+    <div class="modal">
+      <h3>${modalState.id?'تعديل':'إضافة'} ${label}</h3>
+      <form id="simpleForm">
+        <div class="field" style="margin-bottom:10px;"><label>الاسم *</label><input name="name" required value="${editing.name}"></div>
+        ${withContact?`<div class="field"><label>جهة الاتصال</label><input name="contact" value="${editing.contact||''}"></div>`:''}
+        <div class="modal-actions"><button type="submit" class="btn btn-primary">حفظ</button><button type="button" class="btn" id="closeSimpleModal">إلغاء</button></div>
+      </form>
+    </div>
+  </div>`;
+}
+
+/* ============ REPORTS ============ */
+const REPORT_TYPES = [
+  {id:'monthly', label:'تقرير الإهلاك الشهري'},
+  {id:'quarterly', label:'تقرير ربع سنوي'},
+  {id:'semiannual', label:'تقرير نصف سنوي'},
+  {id:'annual', label:'تقرير سنوي'},
+  {id:'range', label:'تقرير بين تاريخين'},
+  {id:'byCompany', label:'تقرير حسب الشركة'},
+  {id:'byCategory', label:'تقرير حسب التصنيف'},
+  {id:'byBranch', label:'تقرير حسب الفرع'},
+  {id:'active', label:'تقرير الأصول النشطة'},
+  {id:'disposed', label:'تقرير الأصول المستبعدة'},
+  {id:'fullyDep', label:'تقرير الأصول المنتهية بالكامل'},
+  {id:'accumulated', label:'تقرير مجمع الإهلاك'},
+  {id:'bookValue', label:'تقرير القيمة الدفترية الحالية'},
+];
+function renderReports(){
+  const rt = state.reportType;
+  const now = new Date();
+  const y = state._rY || now.getFullYear();
+  const m = state._rM!==undefined?state._rM:now.getMonth();
+  const q = state._rQ || Math.floor(now.getMonth()/3)+1;
+  const half = state._rH || (now.getMonth()<6?1:2);
+  const from = state._rFrom || new Date(y,0,1).toISOString().slice(0,10);
+  const to = state._rTo || now.toISOString().slice(0,10);
+
+  let dateControls = '';
+  if(rt==='monthly'){
+    dateControls = `<div class="field"><label>الشهر</label><select id="rM">${['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'].map((mn,i)=>`<option value="${i}" ${m==i?'selected':''}>${mn}</option>`).join('')}</select></div>
+    <div class="field"><label>السنة</label><input type="number" id="rY" value="${y}"></div>`;
+  } else if(rt==='quarterly'){
+    dateControls = `<div class="field"><label>الربع</label><select id="rQ">${[1,2,3,4].map(qq=>`<option value="${qq}" ${q==qq?'selected':''}>الربع ${qq}</option>`).join('')}</select></div>
+    <div class="field"><label>السنة</label><input type="number" id="rY" value="${y}"></div>`;
+  } else if(rt==='semiannual'){
+    dateControls = `<div class="field"><label>النصف</label><select id="rH">${[1,2].map(hh=>`<option value="${hh}" ${half==hh?'selected':''}>النصف ${hh}</option>`).join('')}</select></div>
+    <div class="field"><label>السنة</label><input type="number" id="rY" value="${y}"></div>`;
+  } else if(rt==='annual'){
+    dateControls = `<div class="field"><label>السنة</label><input type="number" id="rY" value="${y}"></div>`;
+  } else if(rt==='range'){
+    dateControls = `<div class="field"><label>من تاريخ</label><input type="date" id="rFrom" value="${from}"></div><div class="field"><label>إلى تاريخ</label><input type="date" id="rTo" value="${to}"></div>`;
+  }
+
+  const {columns, rows, totals} = buildReport(rt, {y,m,q,half,from,to});
+
+  return `
+  <div class="filters-row">
+    <div class="field" style="min-width:220px;"><label>نوع التقرير</label><select id="rType">${REPORT_TYPES.map(r=>`<option value="${r.id}" ${rt===r.id?'selected':''}>${r.label}</option>`).join('')}</select></div>
+    ${dateControls}
+    <button class="btn" id="genReport">توليد التقرير</button>
+    ${perm().exportData?`<button class="btn" id="exportCsv">${ICON.excel} تصدير Excel/CSV</button>`:''}
+    <button class="btn" id="printReport">${ICON.print} طباعة / PDF</button>
+  </div>
+  <div class="table-wrap" id="reportTableWrap">
+  <table>
+    <thead><tr>${columns.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+    <tbody>
+    ${rows.length===0?`<tr><td colspan="${columns.length}" style="text-align:center;color:var(--text-muted);padding:26px;">لا توجد بيانات مطابقة</td></tr>`:rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}
+    ${totals?`<tr style="font-weight:700;background:var(--surface-2);">${totals.map(c=>`<td>${c}</td>`).join('')}</tr>`:''}
+    </tbody>
+  </table>
+  </div>
+  `;
+}
+
+function buildReport(rt, opts){
+  const assets = visibleAssets();
+  const fmt2 = v => fmtMoney(v);
+  function periodAmount(a, startBound, endBound){
+    const sched = buildSchedule(a);
+    let sum=0;
+    sched.forEach(row=>{ const d=new Date(row.date); if(d>=startBound && d<=endBound) sum+=row.monthly; });
+    return sum;
+  }
+  function baseRow(a, periodDep){
+    const info = asOfToday(a);
+    return [a.code, a.name, companyName(a.companyId), categoryName(a.categoryId), fmt2(periodDep), fmt2(info.accumulated), fmt2(info.bookValue)];
+  }
+  const baseCols = ['الكود','اسم الأصل','الشركة','التصنيف','قيمة الإهلاك للفترة','مجمع الإهلاك','صافي القيمة'];
+
+  if(rt==='monthly'){
+    const start = new Date(opts.y, opts.m, 1), end = new Date(opts.y, opts.m+1, 0);
+    const rows = assets.map(a=>baseRow(a, periodAmount(a,start,end)));
+    const totalDep = assets.reduce((s,a)=>s+periodAmount(a,start,end),0);
+    const totalAcc = assets.reduce((s,a)=>s+asOfToday(a).accumulated,0);
+    const totalBook = assets.reduce((s,a)=>s+asOfToday(a).bookValue,0);
+    return {columns:baseCols, rows, totals:['الإجمالي','','','',fmt2(totalDep),fmt2(totalAcc),fmt2(totalBook)]};
+  }
+  if(rt==='quarterly'){
+    const start = new Date(opts.y, (opts.q-1)*3, 1), end = new Date(opts.y, opts.q*3, 0);
+    const rows = assets.map(a=>baseRow(a, periodAmount(a,start,end)));
+    const totalDep = assets.reduce((s,a)=>s+periodAmount(a,start,end),0);
+    return {columns:baseCols, rows, totals:['الإجمالي','','','',fmt2(totalDep),'','']};
+  }
+  if(rt==='semiannual'){
+    const start = new Date(opts.y, opts.half===1?0:6, 1), end = new Date(opts.y, opts.half===1?6:12, 0);
+    const rows = assets.map(a=>baseRow(a, periodAmount(a,start,end)));
+    const totalDep = assets.reduce((s,a)=>s+periodAmount(a,start,end),0);
+    return {columns:baseCols, rows, totals:['الإجمالي','','','',fmt2(totalDep),'','']};
+  }
+  if(rt==='annual'){
+    const start = new Date(opts.y,0,1), end = new Date(opts.y,11,31);
+    const rows = assets.map(a=>baseRow(a, periodAmount(a,start,end)));
+    const totalDep = assets.reduce((s,a)=>s+periodAmount(a,start,end),0);
+    return {columns:baseCols, rows, totals:['الإجمالي','','','',fmt2(totalDep),'','']};
+  }
+  if(rt==='range'){
+    const start = new Date(opts.from), end = new Date(opts.to);
+    const rows = assets.map(a=>baseRow(a, periodAmount(a,start,end)));
+    const totalDep = assets.reduce((s,a)=>s+periodAmount(a,start,end),0);
+    return {columns:baseCols, rows, totals:['الإجمالي','','','',fmt2(totalDep),'','']};
+  }
+  if(rt==='byCompany' || rt==='byCategory' || rt==='byBranch'){
+    const keyFn = rt==='byCompany'? (a=>a.companyId) : (rt==='byCategory'? (a=>a.categoryId) : (a=>a.branchId));
+    const nameFn = rt==='byCompany'? companyName : (rt==='byCategory'? categoryName : branchName);
+    const groups = {};
+    assets.forEach(a=>{ const k=keyFn(a); if(!groups[k]) groups[k]=[]; groups[k].push(a); });
+    const rows=[];
+    let gTotalCost=0,gTotalAcc=0,gTotalBook=0;
+    Object.keys(groups).forEach(k=>{
+      const list = groups[k];
+      const cost = list.reduce((s,a)=>s+Number(a.cost||0),0);
+      const acc = list.reduce((s,a)=>s+asOfToday(a).accumulated,0);
+      const book = list.reduce((s,a)=>s+asOfToday(a).bookValue,0);
+      gTotalCost+=cost; gTotalAcc+=acc; gTotalBook+=book;
+      rows.push([nameFn(k), list.length, fmt2(cost), fmt2(acc), fmt2(book)]);
+    });
+    return {columns:['التصنيف/المجموعة','عدد الأصول','إجمالي التكلفة','مجمع الإهلاك','صافي القيمة'], rows, totals:['الإجمالي', assets.length, fmt2(gTotalCost), fmt2(gTotalAcc), fmt2(gTotalBook)]};
+  }
+  if(rt==='active' || rt==='disposed'){
+    const status = rt==='active'?'active':'disposed';
+    const list = assets.filter(a=>a.status===status);
+    const rows = list.map(a=>{ const info=asOfToday(a); return [a.code,a.name,companyName(a.companyId),categoryName(a.categoryId),fmt2(a.cost),fmt2(info.accumulated),fmt2(info.bookValue)]; });
+    return {columns:['الكود','اسم الأصل','الشركة','التصنيف','التكلفة','مجمع الإهلاك','صافي القيمة'], rows, totals:null};
+  }
+  if(rt==='fullyDep'){
+    const list = assets.filter(a=>asOfToday(a).fullyDepreciated);
+    const rows = list.map(a=>{ const info=asOfToday(a); return [a.code,a.name,companyName(a.companyId),categoryName(a.categoryId),fmt2(a.cost),fmtDate(a.depreciationStartDate),fmt2(info.bookValue)]; });
+    return {columns:['الكود','اسم الأصل','الشركة','التصنيف','التكلفة','تاريخ بدء الإهلاك','صافي القيمة'], rows, totals:null};
+  }
+  if(rt==='accumulated'){
+    const rows = assets.map(a=>{ const info=asOfToday(a); return [a.code,a.name,companyName(a.companyId),categoryName(a.categoryId),fmt2(a.cost),fmt2(info.accumulated),(info.rate.toFixed(1)+'%')]; });
+    const totalAcc = assets.reduce((s,a)=>s+asOfToday(a).accumulated,0);
+    return {columns:['الكود','اسم الأصل','الشركة','التصنيف','التكلفة','مجمع الإهلاك','نسبة الإهلاك'], rows, totals:['الإجمالي','','','','',fmt2(totalAcc),'']};
+  }
+  if(rt==='bookValue'){
+    const rows = assets.map(a=>{ const info=asOfToday(a); return [a.code,a.name,companyName(a.companyId),categoryName(a.categoryId),fmt2(a.cost),fmt2(info.accumulated),fmt2(info.bookValue)]; });
+    const totalBook = assets.reduce((s,a)=>s+asOfToday(a).bookValue,0);
+    return {columns:baseCols.filter(c=>c!=='قيمة الإهلاك للفترة'), rows:rows.map(r=>[r[0],r[1],r[2],r[3],r[4],r[5]]), totals:['الإجمالي','','','','',fmt2(totalBook)]};
+  }
+  return {columns:[], rows:[], totals:null};
+}
+
+/* ============ SETTINGS ============ */
+function renderSettings(){
+  if(!perm().settings){
+    return `<div class="perm-note">صلاحيتك الحالية (${ROLE_LABELS[state.currentRole]}) لا تسمح بالوصول إلى الإعدادات.</div>`;
+  }
+  const s = state.settings;
+  return `
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="section-title">إعدادات عامة</div>
+      <form id="settingsForm">
+        <div class="field" style="margin-bottom:12px;"><label>العملة</label><input name="currency" value="${s.currency}"></div>
+        <div class="field" style="margin-bottom:12px;"><label>عدد المنازل العشرية</label><input type="number" name="decimals" min="0" max="4" value="${s.decimals}"></div>
+        <div class="field" style="margin-bottom:12px;"><label>بداية السنة المالية (شهر-يوم)</label><input name="fiscalYearStart" value="${s.fiscalYearStart}"></div>
+        <div class="field" style="margin-bottom:12px;"><label>نمط ترقيم الأصول</label><input name="numbering" value="${s.numbering}"></div>
+        <div class="hint" style="margin-bottom:12px;">النمط الحالي: كود الشركة - رمز التصنيف - رقم تسلسلي (مثال: ZJ-VEH-0001)</div>
+        <button type="submit" class="btn btn-primary">حفظ الإعدادات</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="section-title">الشركات</div>
+      <div class="table-wrap"><table><thead><tr><th>الاسم</th><th>الرمز</th></tr></thead><tbody>
+      ${state.companies.map(c=>`<tr><td>${c.name}</td><td>${c.code}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="section-title">سجل العمليات (Audit Log)</div>
+      <div style="max-height:260px;overflow-y:auto;">
+      ${state.auditLogs.slice(0,20).map(l=>`<div class="stat-line"><span>${new Date(l.ts).toLocaleString('ar-SA')} — ${ROLE_LABELS[l.role]||l.role}</span><b>${l.action}</b></div>`).join('') || '<p class="hint">لا توجد عمليات مسجلة بعد</p>'}
+      </div>
+    </div>
+  </div>
+  <div class="section-title">تحسينات محاسبية مقترحة للمرحلة القادمة</div>
+  <div class="card">
+    <ul style="margin:0;padding-inline-start:20px;line-height:2;">
+      <li>إعادة تقييم الأصول (Revaluation) مع قيد فروقات إعادة التقييم.</li>
+      <li>بيع الأصل واحتساب الأرباح أو الخسائر الناتجة عن البيع.</li>
+      <li>التخلص من الأصل (Disposal) وإقفال جدول الإهلاك تلقائياً.</li>
+      <li>نقل الأصل بين الفروع والإدارات مع سجل تاريخي للحركة.</li>
+      <li>جرد الأصول دورياً عبر مسح رمز QR أو Barcode لكل أصل.</li>
+      <li>تنبيهات تلقائية عند اقتراب انتهاء العمر الافتراضي للأصل.</li>
+      <li>تنبيهات الصيانة الدورية المرتبطة بتاريخ آخر صيانة.</li>
+    </ul>
+  </div>
+  `;
+}
+
+/* ============ AUTH SCREENS ============ */
+function authShell(bodyHtml){
+  return `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;">
+    <div class="card" style="max-width:400px;width:100%;">
+      <div class="brand" style="color:var(--text);font-size:19px;margin-bottom:4px;">نظام الأصول الثابتة</div>
+      <p class="hint" style="margin-bottom:18px;">إدارة الإهلاك المحاسبي — مؤسسة زاد الجود ومؤسسة القوافل الخمسة</p>
+      ${bodyHtml}
+    </div>
+  </div>`;
+}
+function renderLoginScreen(){
+  const mode = state.authMode || 'login';
+  return authShell(`
+    <div class="tabs" style="margin-bottom:16px;">
+      <button class="tab ${mode==='login'?'active':''}" data-authmode="login">تسجيل الدخول</button>
+      <button class="tab ${mode==='signup'?'active':''}" data-authmode="signup">إنشاء حساب جديد</button>
+    </div>
+    ${state.authError?`<div class="perm-note">${state.authError}</div>`:''}
+    <form id="authForm">
+      <div class="field" style="margin-bottom:12px;"><label>البريد الإلكتروني</label><input type="email" name="email" required></div>
+      <div class="field" style="margin-bottom:14px;"><label>كلمة المرور</label><input type="password" name="password" required minlength="6"></div>
+      ${mode==='signup'?'<p class="hint" style="margin-bottom:14px;">أول حساب يتم إنشاؤه في النظام يصبح تلقائياً "مدير النظام"، وأي حساب لاحق يبقى بانتظار تفعيل الصلاحية من قِبل المدير.</p>':''}
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">${mode==='login'?'تسجيل الدخول':'إنشاء الحساب'}</button>
+    </form>
+    <button type="button" class="btn" id="resetPwBtn" style="width:100%;justify-content:center;margin-top:10px;">نسيت كلمة المرور؟</button>
+  `);
+}
+function renderPendingScreen(){
+  return authShell(`
+    <div style="text-align:center;padding:10px 0;">
+      <div style="font-size:30px;margin-bottom:10px;">&#9203;</div>
+      <h3 style="margin:0 0 8px;">بانتظار تفعيل صلاحيتك</h3>
+      <p class="hint" style="margin-bottom:18px;">تم إنشاء حسابك بنجاح (${state.authUser?state.authUser.email:''})، لكن مدير النظام لم يقم بعد بتحديد دورك. تواصل مع مدير النظام لتفعيل صلاحيتك.</p>
+      <button class="btn" id="logoutBtn2">تسجيل الخروج</button>
+    </div>
+  `);
+}
+function renderDisabledScreen(){
+  return authShell(`
+    <div style="text-align:center;padding:10px 0;">
+      <div style="font-size:30px;margin-bottom:10px;">&#128683;</div>
+      <h3 style="margin:0 0 8px;">تم تعطيل هذا الحساب</h3>
+      <p class="hint" style="margin-bottom:18px;">تواصل مع مدير النظام لمزيد من التفاصيل.</p>
+      <button class="btn" id="logoutBtn2">تسجيل الخروج</button>
+    </div>
+  `);
+}
+function renderAuthErrorScreen(){
+  return authShell(`<div class="perm-note">${state.authError}</div>`);
+}
+
+/* ============ USERS MANAGEMENT ============ */
+function renderUsers(){
+  if(!perm().manageUsers) return `<div class="perm-note">لا تملك صلاحية إدارة المستخدمين.</div>`;
+  return `
+  <div class="modal-actions" style="margin-bottom:16px;"><button class="btn btn-primary" id="addUserBtn">${ICON.add} إنشاء مستخدم جديد</button></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>البريد الإلكتروني</th><th>الدور</th><th>تاريخ الإنشاء</th><th></th></tr></thead>
+    <tbody>
+    ${state.users.length===0?`<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">لا يوجد مستخدمون بعد</td></tr>`:state.users.map(u=>`
+      <tr>
+        <td>${u.email}${state.authUser && state.authUser.uid===u.id?' (أنت)':''}</td>
+        <td>
+          <select data-role-select="${u.id}" ${state.authUser && state.authUser.uid===u.id?'disabled':''}>
+            ${Object.keys(ROLE_LABELS).filter(r=>r!=='pending').map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${ROLE_LABELS[r]}</option>`).join('')}
+          </select>
+        </td>
+        <td>${u.createdAt?fmtDate(u.createdAt):'—'}</td>
+        <td></td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>
+  ${renderNewUserModal()}
+  `;
+}
+function renderNewUserModal(){
+  if(!state.newUserModal) return '';
+  return `
+  <div class="modal-overlay" id="newUserOverlay">
+    <div class="modal">
+      <h3>إنشاء مستخدم جديد</h3>
+      ${state.newUserMsg?`<div class="perm-note">${state.newUserMsg}</div>`:''}
+      <form id="newUserForm">
+        <div class="field" style="margin-bottom:10px;"><label>البريد الإلكتروني *</label><input type="email" name="email" required></div>
+        <div class="field" style="margin-bottom:10px;"><label>كلمة مرور مبدئية *</label><input type="password" name="password" required minlength="6"></div>
+        <div class="field"><label>الدور</label><select name="role">${Object.keys(ROLE_LABELS).filter(r=>r!=='pending').map(r=>`<option value="${r}">${ROLE_LABELS[r]}</option>`).join('')}</select></div>
+        <div class="modal-actions"><button type="submit" class="btn btn-primary" ${state.newUserBusy?'disabled':''}>${state.newUserBusy?'جارٍ الإنشاء...':'إنشاء الحساب'}</button><button type="button" class="btn" id="closeNewUserModal">إلغاء</button></div>
+      </form>
+    </div>
+  </div>`;
+}
+function runRouteScripts(){
+  if(state.route==='dashboard') drawDashboardCharts();
+  if(state.route==='assetForm') bindAssetForm();
+  if(state.route==='categories') bindCategoryEvents();
+  if(state.route==='masterdata') bindMasterDataEvents();
+  if(state.route==='reports') bindReportEvents();
+  if(state.route==='settings') bindSettingsEvents();
+  if(state.route==='assetCard') bindAssetCardEvents();
+  if(state.route==='users') bindUsersEvents();
+}
+
+function attachGlobalEvents(){
+  document.querySelectorAll('[data-nav]').forEach(el=>{
+    el.addEventListener('click', ()=>{ if(el.dataset.nav==='assetForm'){ state.editingAssetId=null; state._draftCode=null; } nav(el.dataset.nav); });
+  });
+  const themeBtn = document.getElementById('themeToggle');
+  if(themeBtn) themeBtn.addEventListener('click', ()=>{ state.theme = state.theme==='dark'?'light':'dark'; render(); });
+  const compFilter = document.getElementById('companyFilter');
+  if(compFilter) compFilter.addEventListener('change', e=>{ state.filterCompany=e.target.value; render(); });
+  const logoutBtn = document.getElementById('logoutBtn');
+  if(logoutBtn) logoutBtn.addEventListener('click', async ()=>{
+    try{ await signOut(auth); showToast('تم تسجيل الخروج'); }
+    catch(e){ console.error(e); showToast('تعذر تسجيل الخروج'); }
+  });
+
+  if(state.route==='assets'){
+    document.getElementById('searchQ')?.addEventListener('input', e=>{ state._searchQ=e.target.value; render(); });
+    document.getElementById('flCategory')?.addEventListener('change', e=>{ state._flCategory=e.target.value; render(); });
+    document.getElementById('flBranch')?.addEventListener('change', e=>{ state._flBranch=e.target.value; render(); });
+    document.getElementById('flDept')?.addEventListener('change', e=>{ state._flDept=e.target.value; render(); });
+    document.getElementById('flStatus')?.addEventListener('change', e=>{ state._flStatus=e.target.value; render(); });
+    document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>nav('assetCard', b.dataset.view)));
+    document.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>{ state.editingAssetId=b.dataset.edit; nav('assetForm'); }));
+    document.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', async ()=>{
+      if(confirm('هل أنت متأكد من حذف هذا الأصل؟ لا يمكن التراجع عن هذا الإجراء.')){
+        const asset = state.assets.find(a=>a.id===b.dataset.del);
+        try{
+          await deleteDoc(doc(db,'assets', b.dataset.del));
+          log('حذف أصل', asset?asset.name:b.dataset.del);
+          showToast('تم حذف الأصل');
+        }catch(e){ console.error(e); showToast('تعذر حذف الأصل من قاعدة البيانات'); }
+      }
+    }));
+  }
+}
+
+function bindAssetForm(){
+  const form = document.getElementById('assetForm');
+  if(!form) return;
+  const compSel = form.querySelector('#fCompany'), catSel = form.querySelector('#fCategory'), codeInput = form.querySelector('[name="code"]');
+  function refreshCode(){
+    if(state.editingAssetId) return;
+    state._draftCode = generateAssetCode(compSel.value, catSel.value);
+    codeInput.value = state._draftCode;
+  }
+  compSel?.addEventListener('change', refreshCode);
+  catSel?.addEventListener('change', refreshCode);
+  document.getElementById('attachInput')?.addEventListener('change', e=>{
+    const names = Array.from(e.target.files).map(f=>f.name);
+    form._pendingAttachments = (form._pendingAttachments||[]).concat(names);
+    showToast(names.length+' ملف تم تسجيل اسمه (تجريبي)');
+    const listEl = document.getElementById('attachList');
+    names.forEach(n=>{ const span=document.createElement('span'); span.className='pill'; span.textContent=n; listEl.appendChild(span); });
+  });
+  form.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData(form);
+    const obj = Object.fromEntries(fd.entries());
+    ['cost','residualValue','usefulLifeYears'].forEach(k=>obj[k]=Number(obj[k]||0));
+    const attachments = Array.from(document.querySelectorAll('#attachList .pill')).map(p=>p.textContent.replace('✕','').trim());
+    obj.attachments = attachments;
+    try{
+      if(state.editingAssetId){
+        await updateDoc(doc(db,'assets', state.editingAssetId), {...obj, updatedAt:new Date().toISOString()});
+        log('تعديل أصل', obj.name);
+        showToast('تم حفظ التعديلات');
+      } else {
+        await addDoc(collection(db,'assets'), {...obj, createdAt:new Date().toISOString()});
+        log('إضافة أصل', obj.name);
+        showToast('تم حفظ الأصل بنجاح');
+      }
+    }catch(err){ console.error(err); showToast('تعذر حفظ الأصل في قاعدة البيانات'); return; }
+    state.editingAssetId=null; state._draftCode=null;
+    nav('assets');
+  });
+}
+
+function bindCategoryEvents(){
+  document.getElementById('addCategoryBtn')?.addEventListener('click', ()=>{ state.categoryModal={id:null}; render(); });
+  document.querySelectorAll('[data-cat-edit]').forEach(b=>b.addEventListener('click',()=>{ state.categoryModal={id:b.dataset.catEdit}; render(); }));
+  document.querySelectorAll('[data-cat-del]').forEach(b=>b.addEventListener('click', async ()=>{
+    if(confirm('حذف هذا التصنيف؟')){
+      try{ await deleteDoc(doc(db,'categories', b.dataset.catDel)); log('حذف تصنيف', b.dataset.catDel); showToast('تم حذف التصنيف'); }
+      catch(e){ console.error(e); showToast('تعذر حذف التصنيف'); }
+    }
+  }));
+  document.querySelectorAll('[data-cat-up]').forEach(b=>b.addEventListener('click',()=>{ swapCategoryOrder(b.dataset.catUp,-1); }));
+  document.querySelectorAll('[data-cat-down]').forEach(b=>b.addEventListener('click',()=>{ swapCategoryOrder(b.dataset.catDown,1); }));
+  document.getElementById('closeCatModal')?.addEventListener('click', ()=>{ state.categoryModal=null; render(); });
+  document.getElementById('catModalOverlay')?.addEventListener('click', e=>{ if(e.target.id==='catModalOverlay'){ state.categoryModal=null; render(); }});
+  document.getElementById('catForm')?.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData(e.target); const obj = Object.fromEntries(fd.entries());
+    try{
+      if(state.categoryModal.id){
+        await updateDoc(doc(db,'categories', state.categoryModal.id), {name:obj.name, code:obj.code.toUpperCase()});
+        log('تعديل تصنيف', obj.name);
+      } else {
+        await addDoc(collection(db,'categories'), {name:obj.name, code:obj.code.toUpperCase(), order: state.categories.length+1});
+        log('إضافة تصنيف', obj.name);
+      }
+      showToast('تم الحفظ');
+    }catch(err){ console.error(err); showToast('تعذر حفظ التصنيف'); }
+    state.categoryModal=null; render();
+  });
+}
+async function swapCategoryOrder(id, dir){
+  const cats = state.categories.slice().sort((a,b)=>a.order-b.order);
+  const idx = cats.findIndex(c=>c.id===id);
+  const swapIdx = idx+dir;
+  if(swapIdx<0||swapIdx>=cats.length) return;
+  const a1 = cats[idx], a2 = cats[swapIdx];
+  try{
+    await updateDoc(doc(db,'categories', a1.id), {order:a2.order});
+    await updateDoc(doc(db,'categories', a2.id), {order:a1.order});
+  }catch(e){ console.error(e); showToast('تعذر تحديث الترتيب'); }
+}
+
+function bindMasterDataEvents(){
+  document.querySelectorAll('[data-mtab]').forEach(b=>b.addEventListener('click',()=>{ state._masterTab=b.dataset.mtab; render(); }));
+  document.querySelectorAll('[data-add-simple]').forEach(b=>b.addEventListener('click',()=>{ state[b.dataset.addSimple+'Modal']={id:null}; render(); }));
+  document.querySelectorAll('[data-edit-simple]').forEach(b=>b.addEventListener('click',()=>{
+    const [key,id]=b.dataset.editSimple.split(':'); state[key+'Modal']={id}; render();
+  }));
+  document.querySelectorAll('[data-del-simple]').forEach(b=>b.addEventListener('click', async ()=>{
+    const [key,id]=b.dataset.delSimple.split(':');
+    if(confirm('حذف هذا العنصر؟')){
+      try{ await deleteDoc(doc(db,key,id)); log('حذف عنصر بيانات أساسية', key); showToast('تم الحذف'); }
+      catch(e){ console.error(e); showToast('تعذر الحذف'); }
+    }
+  }));
+  document.getElementById('closeSimpleModal')?.addEventListener('click', ()=>{ ['branches','departments','suppliers'].forEach(k=>state[k+'Modal']=null); render(); });
+  document.getElementById('simpleModalOverlay')?.addEventListener('click', e=>{ if(e.target.id==='simpleModalOverlay'){ ['branches','departments','suppliers'].forEach(k=>state[k+'Modal']=null); render(); }});
+  document.getElementById('simpleForm')?.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const key = state._masterTab;
+    const fd = new FormData(e.target); const obj = Object.fromEntries(fd.entries());
+    const modal = state[key+'Modal'];
+    try{
+      if(modal.id){
+        await updateDoc(doc(db,key, modal.id), obj);
+        log('تعديل', key);
+      } else {
+        await addDoc(collection(db,key), obj);
+        log('إضافة', key);
+      }
+      showToast('تم الحفظ');
+    }catch(err){ console.error(err); showToast('تعذر الحفظ'); }
+    state[key+'Modal']=null; render();
+  });
+}
+
+function bindReportEvents(){
+  document.getElementById('rType')?.addEventListener('change', e=>{ state.reportType=e.target.value; render(); });
+  document.getElementById('rY')?.addEventListener('change', e=>{ state._rY=Number(e.target.value); });
+  document.getElementById('rM')?.addEventListener('change', e=>{ state._rM=Number(e.target.value); });
+  document.getElementById('rQ')?.addEventListener('change', e=>{ state._rQ=Number(e.target.value); });
+  document.getElementById('rH')?.addEventListener('change', e=>{ state._rH=Number(e.target.value); });
+  document.getElementById('rFrom')?.addEventListener('change', e=>{ state._rFrom=e.target.value; });
+  document.getElementById('rTo')?.addEventListener('change', e=>{ state._rTo=e.target.value; });
+  document.getElementById('genReport')?.addEventListener('click', render);
+  document.getElementById('printReport')?.addEventListener('click', ()=>window.print());
+  document.getElementById('exportCsv')?.addEventListener('click', ()=>{
+    const table = document.querySelector('#reportTableWrap table');
+    const wb = XLSX.utils.table_to_book(table, {sheet:'تقرير'});
+    XLSX.writeFile(wb, 'تقرير-الأصول-'+Date.now()+'.xlsx');
+    showToast('تم تصدير الملف');
+  });
+}
+
+function bindSettingsEvents(){
+  document.getElementById('settingsForm')?.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData(e.target); const obj = Object.fromEntries(fd.entries());
+    obj.decimals = Number(obj.decimals);
+    try{
+      await setDoc(doc(db,'settings','main'), obj, {merge:true});
+      showToast('تم حفظ الإعدادات');
+    }catch(err){ console.error(err); showToast('تعذر حفظ الإعدادات'); }
+  });
+}
+
+function bindAssetCardEvents(){
+  document.getElementById('printCard')?.addEventListener('click', ()=>window.print());
+}
+
+function bindLoginEvents(){
+  document.querySelectorAll('[data-authmode]').forEach(b=>b.addEventListener('click', ()=>{ state.authMode=b.dataset.authmode; state.authError=''; render(); }));
+  document.getElementById('authForm')?.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData(e.target); const obj = Object.fromEntries(fd.entries());
+    state.authError='';
+    try{
+      if(state.authMode==='signup'){
+        await createUserWithEmailAndPassword(auth, obj.email, obj.password);
+      } else {
+        await signInWithEmailAndPassword(auth, obj.email, obj.password);
+      }
+    }catch(err){
+      state.authError = 'تعذر تسجيل الدخول: ' + (err.message||'خطأ غير معروف');
+      render();
+    }
+  });
+  document.getElementById('resetPwBtn')?.addEventListener('click', async ()=>{
+    const email = document.querySelector('#authForm [name="email"]')?.value;
+    if(!email){ showToast('أدخل البريد الإلكتروني أولاً'); return; }
+    try{ await sendPasswordResetEmail(auth, email); showToast('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك'); }
+    catch(e){ showToast('تعذر إرسال رابط إعادة التعيين'); }
+  });
+}
+function bindPendingEvents(){
+  document.getElementById('logoutBtn2')?.addEventListener('click', async ()=>{
+    try{ await signOut(auth); }catch(e){ console.error(e); }
+  });
+}
+function bindUsersEvents(){
+  document.getElementById('addUserBtn')?.addEventListener('click', ()=>{ state.newUserModal=true; state.newUserMsg=''; render(); });
+  document.getElementById('closeNewUserModal')?.addEventListener('click', ()=>{ state.newUserModal=null; render(); });
+  document.getElementById('newUserOverlay')?.addEventListener('click', e=>{ if(e.target.id==='newUserOverlay'){ state.newUserModal=null; render(); }});
+  document.querySelectorAll('[data-role-select]').forEach(sel=>sel.addEventListener('change', async e=>{
+    const uidTarget = sel.dataset.roleSelect;
+    try{
+      await updateDoc(doc(db,'users', uidTarget), {role:e.target.value});
+      log('تغيير دور مستخدم', uidTarget+' -> '+e.target.value);
+      showToast('تم تحديث الدور');
+    }catch(err){ console.error(err); showToast('تعذر تحديث الدور'); }
+  }));
+  document.getElementById('newUserForm')?.addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData(e.target); const obj = Object.fromEntries(fd.entries());
+    state.newUserBusy = true; render();
+    const result = await adminCreateUser(obj.email, obj.password, obj.role);
+    state.newUserBusy = false;
+    if(result.ok){
+      log('إنشاء مستخدم', obj.email);
+      state.newUserModal = null; state.newUserMsg='';
+      showToast('تم إنشاء المستخدم بنجاح');
+    } else {
+      state.newUserMsg = 'تعذر إنشاء المستخدم: ' + result.error;
+    }
+    render();
+  });
+}
+
+/* ============ BOOT ============ */
+document.getElementById('app').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-2);">جارِ التحقق من تسجيل الدخول...</div>';
+handleAuth();
+
+</script>
+</body>
+</html>
