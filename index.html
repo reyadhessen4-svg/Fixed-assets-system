@@ -400,45 +400,78 @@ function generateAssetCode(companyId, categoryId){
   return `${cc}-${cat}-${seq}`;
 }
 
-/* depreciation engine */
+/* depreciation engine — daily proration (Actual/365) */
+const MS_DAY = 1000*60*60*24;
 function usefulLifeMonths(asset){ return Math.max(1, Math.round(Number(asset.usefulLifeYears||0)*12)); }
-function monthlyDepreciation(asset){
+function dailyDepreciationRate(asset){
   const cost = Number(asset.cost||0), residual = Number(asset.residualValue||0);
-  const months = usefulLifeMonths(asset);
-  return (cost - residual) / months;
+  const years = Number(asset.usefulLifeYears||0);
+  if(years<=0) return 0;
+  return (cost - residual) / years / 365;
 }
-function buildSchedule(asset){
-  const months = usefulLifeMonths(asset);
-  const monthlyDep = monthlyDepreciation(asset);
+function depreciationEndDate(asset){
+  const start = new Date(asset.depreciationStartDate || asset.purchaseDate);
+  return addMonths(start, usefulLifeMonths(asset));
+}
+function accumulatedAsOf(asset, refDate){
+  const start = new Date(asset.depreciationStartDate || asset.purchaseDate);
   const cost = Number(asset.cost||0), residual = Number(asset.residualValue||0);
   const depBase = cost - residual;
+  if(refDate < start || depBase<=0) return 0;
+  const dailyRate = dailyDepreciationRate(asset);
+  const endDate = depreciationEndDate(asset);
+  const effEnd = refDate > endDate ? endDate : refDate;
+  const days = Math.max(0, Math.round((effEnd - start) / MS_DAY));
+  return Math.min(depBase, dailyRate * days);
+}
+function periodDepreciation(asset, rangeStart, rangeEnd){
+  const dayBeforeStart = new Date(rangeStart.getTime() - MS_DAY);
+  return accumulatedAsOf(asset, rangeEnd) - accumulatedAsOf(asset, dayBeforeStart);
+}
+function buildSchedule(asset){
+  const start = new Date(asset.depreciationStartDate || asset.purchaseDate);
+  const cost = Number(asset.cost||0), residual = Number(asset.residualValue||0);
+  const depBase = cost - residual;
+  const dailyRate = dailyDepreciationRate(asset);
+  const endDate = depreciationEndDate(asset);
   const rows = [];
-  let accumulated = 0;
-  const start = asset.depreciationStartDate || asset.purchaseDate;
-  for(let i=1;i<=months;i++){
-    let dep = monthlyDep;
-    accumulated += dep;
-    if(accumulated > depBase || i===months){ accumulated = depBase; dep = depBase - (accumulated - dep); dep = Math.max(0, dep); }
-    accumulated = Math.min(accumulated, depBase);
-    rows.push({ n:i, date: addMonths(start, i-1).toISOString(), monthly: monthlyDep, accumulated: accumulated, bookValue: cost - accumulated });
+  if(depBase<=0 || dailyRate<=0) return rows;
+  let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  let accumulated = 0, n = 0, guard = 0;
+  while(cursor < endDate && guard < 2400){
+    guard++;
+    const nextMonth = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1);
+    const segStart = cursor > start ? cursor : start;
+    const segEnd = nextMonth < endDate ? nextMonth : endDate;
+    const days = Math.max(0, Math.round((segEnd - segStart) / MS_DAY));
+    n++;
+    let dep = dailyRate * days;
+    let newAcc = accumulated + dep;
+    const isLast = nextMonth >= endDate;
+    if(newAcc > depBase || isLast){ newAcc = depBase; dep = Math.max(0, newAcc - accumulated); }
+    accumulated = newAcc;
+    rows.push({ n, date: cursor.toISOString(), monthly: dep, accumulated, bookValue: cost - accumulated });
+    cursor = nextMonth;
   }
   return rows;
 }
 function asOfToday(asset, refDate){
   refDate = refDate || new Date();
   const start = new Date(asset.depreciationStartDate || asset.purchaseDate);
-  const months = usefulLifeMonths(asset);
-  let elapsed = monthsBetween(start, refDate) + 1;
-  elapsed = Math.max(0, Math.min(elapsed, months));
   const cost = Number(asset.cost||0), residual = Number(asset.residualValue||0);
   const depBase = cost - residual;
-  const monthlyDep = monthlyDepreciation(asset);
-  let accumulated = elapsed>=months ? depBase : monthlyDep*elapsed;
-  accumulated = Math.min(accumulated, depBase);
+  const accumulated = accumulatedAsOf(asset, refDate);
   const bookValue = cost - accumulated;
-  const remainingMonths = Math.max(0, months - elapsed);
+  const endDate = depreciationEndDate(asset);
+  const totalDays = Math.max(1, Math.round((endDate - start) / MS_DAY));
+  const elapsedDays = refDate < start ? 0 : Math.max(0, Math.round(((refDate>endDate?endDate:refDate) - start) / MS_DAY));
+  const remainingDays = Math.max(0, totalDays - elapsedDays);
+  const monthsTotal = usefulLifeMonths(asset);
+  const monthsElapsed = Math.min(monthsTotal, Math.round(elapsedDays/30.4368));
+  const monthsRemaining = Math.max(0, monthsTotal - monthsElapsed);
   const rate = depBase>0 ? (accumulated/depBase*100) : 100;
-  return { monthsElapsed:elapsed, monthsTotal:months, monthsRemaining:remainingMonths, accumulated, bookValue, rate: Math.min(100,rate), monthlyDep, fullyDepreciated: elapsed>=months };
+  const fullyDepreciated = (elapsedDays>=totalDays) || (depBase>0 && accumulated>=depBase-0.0001);
+  return { monthsElapsed, monthsTotal, monthsRemaining, daysElapsed:elapsedDays, daysTotal:totalDays, daysRemaining:remainingDays, accumulated, bookValue, rate: Math.min(100,rate), fullyDepreciated };
 }
 
 /* ============ TOAST ============ */
@@ -829,11 +862,11 @@ function renderAssetCard(id){
       <div style="margin-top:16px;">
         <div class="stat-line"><span>تكلفة الأصل</span><b>${fmtMoney(a.cost)}</b></div>
         <div class="stat-line"><span>القيمة التخريدية</span><b>${fmtMoney(a.residualValue)}</b></div>
-        <div class="stat-line"><span>إجمالي الإهلاك حتى اليوم</span><b>${fmtMoney(info.accumulated)}</b></div>
+        <div class="stat-line"><span>إجمالي الإهلاك حتى اليوم (بالتناسب اليومي)</span><b>${fmtMoney(info.accumulated)}</b></div>
         <div class="stat-line"><span>صافي القيمة الحالية</span><b>${fmtMoney(info.bookValue)}</b></div>
-        <div class="stat-line"><span>العمر الافتراضي</span><b>${info.monthsTotal} شهر</b></div>
-        <div class="stat-line"><span>الأشهر المستهلكة</span><b>${info.monthsElapsed} شهر</b></div>
-        <div class="stat-line"><span>الأشهر المتبقية</span><b>${info.monthsRemaining} شهر</b></div>
+        <div class="stat-line"><span>العمر الافتراضي</span><b>${info.monthsTotal} شهر (${info.daysTotal} يوم)</b></div>
+        <div class="stat-line"><span>المنقضي</span><b>${info.monthsElapsed} شهر تقريباً — ${info.daysElapsed} يوم بالضبط</b></div>
+        <div class="stat-line"><span>المتبقي</span><b>${info.monthsRemaining} شهر تقريباً — ${info.daysRemaining} يوم بالضبط</b></div>
       </div>
     </div>
   </div>
@@ -998,6 +1031,7 @@ function renderReports(){
     ${perm().exportData?`<button class="btn" id="exportCsv">${ICON.excel} تصدير Excel/CSV</button>`:''}
     <button class="btn" id="printReport">${ICON.print} طباعة / PDF</button>
   </div>
+  <p class="hint" style="margin-bottom:10px;">كل التقارير الآن تحتسب الإهلاك بالتناسب اليومي الدقيق (Actual/365)، بما يشمل الأشهر الجزئية عند بداية أو نهاية عمر الأصل. عمودا "مجمع الإهلاك" و"صافي القيمة" محسوبان كما في نهاية الفترة المحددة للتقرير (وليس بالضرورة تاريخ اليوم لو كانت الفترة في الماضي).</p>
   <div class="table-wrap" id="reportTableWrap">
   <table>
     <thead><tr>${columns.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
@@ -1013,49 +1047,34 @@ function renderReports(){
 function buildReport(rt, opts){
   const assets = visibleAssets();
   const fmt2 = v => fmtMoney(v);
-  function periodAmount(a, startBound, endBound){
-    const sched = buildSchedule(a);
-    let sum=0;
-    sched.forEach(row=>{ const d=new Date(row.date); if(d>=startBound && d<=endBound) sum+=row.monthly; });
-    return sum;
-  }
-  function baseRow(a, periodDep){
-    const info = asOfToday(a);
+  function baseRow(a, periodDep, refDate){
+    const info = asOfToday(a, refDate);
     return [a.code, a.name, companyName(a.companyId), categoryName(a.categoryId), fmt2(periodDep), fmt2(info.accumulated), fmt2(info.bookValue)];
   }
   const baseCols = ['الكود','اسم الأصل','الشركة','التصنيف','قيمة الإهلاك للفترة','مجمع الإهلاك','صافي القيمة'];
 
-  if(rt==='monthly'){
-    const start = new Date(opts.y, opts.m, 1), end = new Date(opts.y, opts.m+1, 0);
-    const rows = assets.map(a=>baseRow(a, periodAmount(a,start,end)));
-    const totalDep = assets.reduce((s,a)=>s+periodAmount(a,start,end),0);
-    const totalAcc = assets.reduce((s,a)=>s+asOfToday(a).accumulated,0);
-    const totalBook = assets.reduce((s,a)=>s+asOfToday(a).bookValue,0);
+  function periodReport(start, end){
+    const rows = assets.map(a=>baseRow(a, periodDepreciation(a,start,end), end));
+    const totalDep = assets.reduce((s,a)=>s+periodDepreciation(a,start,end),0);
+    const totalAcc = assets.reduce((s,a)=>s+asOfToday(a,end).accumulated,0);
+    const totalBook = assets.reduce((s,a)=>s+asOfToday(a,end).bookValue,0);
     return {columns:baseCols, rows, totals:['الإجمالي','','','',fmt2(totalDep),fmt2(totalAcc),fmt2(totalBook)]};
   }
+
+  if(rt==='monthly'){
+    return periodReport(new Date(opts.y, opts.m, 1), new Date(opts.y, opts.m+1, 0));
+  }
   if(rt==='quarterly'){
-    const start = new Date(opts.y, (opts.q-1)*3, 1), end = new Date(opts.y, opts.q*3, 0);
-    const rows = assets.map(a=>baseRow(a, periodAmount(a,start,end)));
-    const totalDep = assets.reduce((s,a)=>s+periodAmount(a,start,end),0);
-    return {columns:baseCols, rows, totals:['الإجمالي','','','',fmt2(totalDep),'','']};
+    return periodReport(new Date(opts.y, (opts.q-1)*3, 1), new Date(opts.y, opts.q*3, 0));
   }
   if(rt==='semiannual'){
-    const start = new Date(opts.y, opts.half===1?0:6, 1), end = new Date(opts.y, opts.half===1?6:12, 0);
-    const rows = assets.map(a=>baseRow(a, periodAmount(a,start,end)));
-    const totalDep = assets.reduce((s,a)=>s+periodAmount(a,start,end),0);
-    return {columns:baseCols, rows, totals:['الإجمالي','','','',fmt2(totalDep),'','']};
+    return periodReport(new Date(opts.y, opts.half===1?0:6, 1), new Date(opts.y, opts.half===1?6:12, 0));
   }
   if(rt==='annual'){
-    const start = new Date(opts.y,0,1), end = new Date(opts.y,11,31);
-    const rows = assets.map(a=>baseRow(a, periodAmount(a,start,end)));
-    const totalDep = assets.reduce((s,a)=>s+periodAmount(a,start,end),0);
-    return {columns:baseCols, rows, totals:['الإجمالي','','','',fmt2(totalDep),'','']};
+    return periodReport(new Date(opts.y,0,1), new Date(opts.y,11,31));
   }
   if(rt==='range'){
-    const start = new Date(opts.from), end = new Date(opts.to);
-    const rows = assets.map(a=>baseRow(a, periodAmount(a,start,end)));
-    const totalDep = assets.reduce((s,a)=>s+periodAmount(a,start,end),0);
-    return {columns:baseCols, rows, totals:['الإجمالي','','','',fmt2(totalDep),'','']};
+    return periodReport(new Date(opts.from), new Date(opts.to));
   }
   if(rt==='byCompany' || rt==='byCategory' || rt==='byBranch'){
     const keyFn = rt==='byCompany'? (a=>a.companyId) : (rt==='byCategory'? (a=>a.categoryId) : (a=>a.branchId));
