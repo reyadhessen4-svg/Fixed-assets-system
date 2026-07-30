@@ -367,7 +367,12 @@ function fmtMoney(n){
 function fmtDate(d){ if(!d) return '—'; const dt=new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('en-GB'); }
 function monthLabel(d){ const dt=new Date(d); return dt.toLocaleDateString('ar-SA',{month:'long',year:'numeric'}); }
 function addMonths(date, n){ const d=new Date(date); d.setMonth(d.getMonth()+n); return d; }
-function monthsBetween(a,b){ const d1=new Date(a), d2=new Date(b); return (d2.getFullYear()-d1.getFullYear())*12 + (d2.getMonth()-d1.getMonth()); }
+function monthsBetween(a,b){
+  const d1=new Date(a), d2=new Date(b);
+  let months = (d2.getFullYear()-d1.getFullYear())*12 + (d2.getMonth()-d1.getMonth());
+  if(d2.getDate() < d1.getDate()) months -= 1;
+  return Math.max(0, months);
+}
 function companyName(id){ const c=state.companies.find(x=>x.id===id); return c?c.name:'—'; }
 function companyCode(id){ const c=state.companies.find(x=>x.id===id); return c?c.code:'GEN'; }
 function categoryName(id){ const c=state.categories.find(x=>x.id===id); return c?c.name:'—'; }
