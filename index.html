@@ -1174,6 +1174,22 @@ function renderSettings(){
       </div>
     </div>
   </div>
+  <div class="section-title">النسخ الاحتياطي والاستعادة</div>
+  <div class="grid grid-2">
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:14px;">تنزيل نسخة احتياطية</h3>
+      <p class="hint" style="margin-bottom:14px;">يُنزّل ملف JSON واحد يحتوي كل بيانات النظام (الشركات، التصنيفات، الفروع، الإدارات، الموردين، كل الأصول، الإعدادات${perm().manageUsers?'، والمستخدمين وصلاحياتهم':''})، باسم يتضمن اسم النظام والتاريخ والساعة تلقائياً، حتى تقدر ترجع له في أي وقت.</p>
+      <button class="btn btn-primary" id="downloadBackupBtn">${ICON.excel} تنزيل نسخة احتياطية الآن</button>
+    </div>
+    ${state.currentRole==='admin'?`
+    <div class="card">
+      <h3 style="margin:0 0 8px;font-size:14px;">استعادة من نسخة احتياطية</h3>
+      <div class="perm-note">تحذير: الاستعادة تكتب فوق أي بيانات حالية لها نفس المعرّف (ID) الموجود في الملف. لا تحذف بيانات غير موجودة في النسخة، لكنها قد تستبدل بيانات حديثة إن كانت النسخة قديمة. استخدمها بحذر.</div>
+      <div class="field" style="margin-bottom:12px;"><label>ملف النسخة الاحتياطية (.json)</label><input type="file" id="restoreFile" accept=".json"></div>
+      <button class="btn" id="restoreBackupBtn">استعادة البيانات من الملف</button>
+      <div id="restoreStatus" class="hint" style="margin-top:10px;"></div>
+    </div>`:''}
+  </div>
   <div class="section-title">تحسينات محاسبية مقترحة للمرحلة القادمة</div>
   <div class="card">
     <ul style="margin:0;padding-inline-start:20px;line-height:2;">
@@ -1589,6 +1605,102 @@ function bindSettingsEvents(){
       showToast('تم حفظ الإعدادات');
     }catch(err){ console.error(err); showToast('تعذر حفظ الإعدادات'); }
   });
+  document.getElementById('downloadBackupBtn')?.addEventListener('click', downloadBackup);
+  document.getElementById('restoreBackupBtn')?.addEventListener('click', restoreFromBackup);
+}
+
+const SYSTEM_NAME = 'نظام إدارة الأصول الثابتة';
+function timestampStr(){
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+}
+function downloadBackup(){
+  const stamp = timestampStr();
+  const backup = {
+    systemName: SYSTEM_NAME,
+    exportedAt: new Date().toISOString(),
+    exportedBy: state.authUser ? state.authUser.email : '',
+    version: 1,
+    data: {
+      companies: state.companies,
+      categories: state.categories,
+      branches: state.branches,
+      departments: state.departments,
+      suppliers: state.suppliers,
+      assets: state.assets,
+      settings: state.settings,
+      users: perm().manageUsers ? state.users : undefined,
+    }
+  };
+  try{
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${SYSTEM_NAME}_${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    log('تنزيل نسخة احتياطية', stamp);
+    showToast('تم تنزيل النسخة الاحتياطية');
+  }catch(e){
+    console.error(e);
+    showToast('تعذر إنشاء ملف النسخة الاحتياطية');
+  }
+}
+async function restoreFromBackup(){
+  const statusEl = document.getElementById('restoreStatus');
+  const fileInput = document.getElementById('restoreFile');
+  const file = fileInput?.files?.[0];
+  if(!file){ showToast('اختر ملف النسخة الاحتياطية أولاً'); return; }
+  let backup;
+  try{
+    const text = await file.text();
+    backup = JSON.parse(text);
+  }catch(e){
+    showToast('الملف ليس بصيغة JSON صحيحة');
+    return;
+  }
+  if(!backup || !backup.data){
+    showToast('هذا الملف لا يبدو نسخة احتياطية صحيحة لهذا النظام');
+    return;
+  }
+  const d = backup.data;
+  const counts = {
+    companies:(d.companies||[]).length, categories:(d.categories||[]).length, branches:(d.branches||[]).length,
+    departments:(d.departments||[]).length, suppliers:(d.suppliers||[]).length, assets:(d.assets||[]).length,
+    users:(d.users||[]).length
+  };
+  const summary = `سيتم استعادة: ${counts.companies} شركة، ${counts.categories} تصنيف، ${counts.branches} فرع، ${counts.departments} إدارة، ${counts.suppliers} مورد، ${counts.assets} أصل${counts.users?('، '+counts.users+' مستخدم'):''}، بالإضافة إلى الإعدادات العامة.\n\nمن نسخة بتاريخ: ${backup.exportedAt?fmtDate(backup.exportedAt):'غير معروف'}\n\nهذا الإجراء سيكتب فوق أي بيانات حالية بنفس المعرّف. هل أنت متأكد من المتابعة؟`;
+  if(!confirm(summary)) return;
+  if(statusEl) statusEl.textContent = 'جارٍ الاستعادة...';
+  let written=0, failed=0;
+  const collectionsToRestore = ['companies','categories','branches','departments','suppliers','assets'];
+  if(counts.users) collectionsToRestore.push('users');
+  try{
+    for(const colName of collectionsToRestore){
+      const items = d[colName] || [];
+      for(const item of items){
+        const {id, ...rest} = item;
+        if(!id) continue;
+        try{ await setDoc(doc(db, colName, id), rest); written++; }
+        catch(e){ console.error('restore item failed', colName, id, e); failed++; }
+      }
+    }
+    if(d.settings){
+      try{ await setDoc(doc(db,'settings','main'), d.settings, {merge:true}); }
+      catch(e){ console.error('restore settings failed', e); }
+    }
+    log('استعادة نسخة احتياطية', `${written} عنصر، ${failed} فشل`);
+    if(statusEl) statusEl.textContent = `اكتملت الاستعادة: ${written} عنصر بنجاح${failed?(', '+failed+' فشل'):''}.`;
+    showToast('اكتملت عملية الاستعادة');
+  }catch(e){
+    console.error(e);
+    if(statusEl) statusEl.textContent = 'حدث خطأ أثناء الاستعادة.';
+    showToast('تعذرت الاستعادة بالكامل');
+  }
 }
 
 function bindAssetCardEvents(){
